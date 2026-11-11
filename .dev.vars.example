@@ -1,0 +1,3 @@
+ADMIN_TOKEN=replace-with-a-long-random-token
+TELEGRAM_BOT_TOKEN=replace-with-your-bot-token
+TELEGRAM_STORAGE_CHAT_ID=-1001234567890

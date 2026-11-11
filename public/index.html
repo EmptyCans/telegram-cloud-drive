@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>云盘</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header>
+    <div><h1 id="title">云盘</h1><p id="description" hidden></p></div>
+    <button id="logout" hidden>退出</button>
+  </header>
+  <main>
+    <form id="login">
+      <h2>管理员登录</h2>
+      <label for="token">管理员密钥</label>
+      <div class="row"><input id="token" type="password" autocomplete="current-password" required><button class="primary">登录</button></div>
+    </form>
+    <section id="manager" hidden aria-label="文件管理">
+      <div class="toolbar">
+        <form id="search" class="row"><input name="q" type="search" placeholder="搜索文件或目录" aria-label="搜索名称"><input name="tag" type="search" placeholder="筛选标签" aria-label="筛选标签"><button>搜索</button></form>
+        <div class="row"><button id="settings">设置</button><button id="new-folder">新建目录</button><button id="choose-files" class="primary">上传文件</button></div>
+        <input id="file-input" type="file" multiple hidden>
+      </div>
+      <nav id="breadcrumbs" aria-label="目录路径"></nav>
+      <div id="drop-zone">
+        <ul id="entries"></ul>
+        <p id="empty" hidden>这里还没有文件。可点击上传，或将文件拖到这里。</p>
+      </div>
+      <div id="pagination" class="row" hidden>
+        <button id="previous">上一页</button><span id="page"></span><button id="next">下一页</button>
+      </div>
+    </section>
+    <p id="notice" role="status" aria-live="polite"></p>
+  </main>
+  <dialog id="settings-dialog">
+    <form id="settings-form">
+      <h2>站点设置</h2>
+      <label>站点名称<input name="title" required maxlength="60"></label>
+      <label>站点描述<input name="description" maxlength="200"></label>
+      <label>单文件上传上限（MiB）<input name="maxUploadMiB" type="number" min="1" max="20" required></label>
+      <div class="row"><button type="button" data-close>取消</button><button class="primary">保存</button></div>
+    </form>
+  </dialog>
+  <dialog id="preview-dialog">
+    <div class="toolbar"><h2 id="preview-name"></h2><button data-close>关闭</button></div>
+    <img id="preview-image" alt="">
+  </dialog>
+</body>
+</html>

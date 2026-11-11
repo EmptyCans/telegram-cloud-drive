@@ -1,0 +1,22 @@
+{
+  "name": "telegram-cloud-drive",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-04-21",
+  "assets": {
+    "directory": "./public",
+    "run_worker_first": [
+      "/api/*",
+      "/f/*"
+    ]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "CONFIG"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB"
+    }
+  ]
+}
