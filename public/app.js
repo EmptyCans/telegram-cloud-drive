@@ -89,6 +89,12 @@ function resetFilters() {
   $("search").reset();
 }
 
+async function goRoot() {
+  folders = [];
+  resetFilters();
+  await refresh();
+}
+
 function currentFolder() {
   return folders.at(-1)?.id ?? "";
 }
@@ -163,31 +169,51 @@ function renderItem(item) {
   const folder = item.kind === "folder";
   const image = item.mime?.startsWith("image/");
   const li = document.createElement("li");
+  const tile = document.createElement("span");
+  tile.className = "file-tile" + (folder ? " folder-tile" : "");
+  tile.setAttribute("aria-hidden", "true");
+  const icon = document.createElement("span");
+  icon.className = "icon " + (folder ? "icon-folder" : "icon-file");
+  tile.append(icon);
   const name = document.createElement("div");
   name.className = "entry-name";
-  name.append(button((folder ? "▸ " : "") + item.name, async () => {
+  const open = button(item.name, async () => {
     if (!folder) return image ? preview(item) : download(item);
     folders = query || tag ? [item] : [...folders, item];
     resetFilters();
     await refresh();
-  }));
+  });
+  open.className = "entry-title";
+  name.append(open);
+  const meta = document.createElement("div");
+  meta.className = "entry-meta";
   if (!folder) {
     const size = document.createElement("small");
     size.textContent = item.size >= MiB ? (item.size / MiB).toFixed(1) + " MiB" : Math.ceil(item.size / 1024) + " KiB";
-    name.append(size);
+    meta.append(size);
   }
   for (const label of item.tags) {
     const chip = document.createElement("small");
     chip.textContent = label;
-    name.append(chip);
+    chip.className = "tag";
+    meta.append(chip);
   }
+  if (meta.childElementCount) name.append(meta);
   const actions = document.createElement("div");
   actions.className = "row actions";
+  const details = document.createElement("details");
+  const summary = document.createElement("summary");
+  summary.textContent = "•••";
+  summary.setAttribute("aria-label", "更多操作");
+  const menu = document.createElement("div");
+  menu.className = "action-panel";
+  details.append(summary, menu);
   if (!folder) {
-    actions.append(button("下载", () => download(item)), button(item.share_token ? "复制链接" : "分享", () => share(item)));
-    if (item.share_token) actions.append(button("撤销链接", () => update(item, { share: false })));
+    actions.append(button("下载", () => download(item)));
+    menu.append(button(item.share_token ? "复制链接" : "分享", () => share(item)));
+    if (item.share_token) menu.append(button("撤销链接", () => update(item, { share: false })));
   }
-  actions.append(
+  menu.append(
     button("重命名", async () => {
       const value = prompt("新名称", item.name);
       if (value !== null && value.trim() !== item.name) await update(item, { name: value });
@@ -204,7 +230,10 @@ function renderItem(item) {
       await remove(item);
     })
   );
-  li.append(name, actions);
+  menu.lastElementChild.className = "danger";
+  menu.addEventListener("click", () => { details.open = false; });
+  actions.append(details);
+  li.append(tile, name, actions);
   return li;
 }
 
@@ -218,11 +247,7 @@ async function refresh() {
     return refresh();
   }
   const crumbs = $("breadcrumbs");
-  crumbs.replaceChildren(button("根目录", async () => {
-    folders = [];
-    resetFilters();
-    await refresh();
-  }));
+  crumbs.replaceChildren(button("根目录", goRoot));
   for (const [index, folder] of folders.entries()) {
     crumbs.append(" / ", button(folder.name, async () => {
       folders = folders.slice(0, index + 1);
@@ -233,7 +258,7 @@ async function refresh() {
   if (query || tag) crumbs.append(" / 全局搜索");
   $("entries").replaceChildren(...result.entries.map(renderItem));
   $("empty").hidden = result.entries.length > 0;
-  $("empty").textContent = query || tag ? "没有符合条件的项目。" : "这里还没有文件。可点击上传，或将文件拖到这里。";
+  $("empty-message").textContent = query || tag ? "没有符合条件的项目。" : "将文件拖到这里，或点击「上传文件」。";
   $("pagination").hidden = !page && !result.hasMore;
   $("previous").disabled = page === 0;
   $("next").disabled = !result.hasMore;
@@ -277,6 +302,19 @@ $("login").addEventListener("submit", action(async (event) => {
   await loggedIn();
 }));
 $("logout").addEventListener("click", () => { loggedOut(); notice(); });
+$("go-root").addEventListener("click", action(goRoot));
+document.addEventListener("click", (event) => {
+  for (const menu of document.querySelectorAll(".actions details[open]")) {
+    if (!menu.contains(event.target)) menu.open = false;
+  }
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  for (const menu of document.querySelectorAll(".actions details[open]")) {
+    if (menu.contains(document.activeElement)) menu.querySelector("summary").focus();
+    menu.open = false;
+  }
+});
 $("search").addEventListener("submit", action(async (event) => {
   event.preventDefault();
   const form = new FormData(event.target);

@@ -9,43 +9,68 @@
   <script type="module" src="/app.js"></script>
 </head>
 <body>
-  <header>
-    <div><h1 id="title">云盘</h1><p id="description" hidden></p></div>
-    <button id="logout" hidden>退出</button>
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><span class="icon icon-cloud"></span></span>
+        <div><h1 id="title">云盘</h1><p id="description" hidden></p></div>
+      </div>
+      <button id="logout" hidden>退出登录</button>
+    </div>
   </header>
   <main>
     <form id="login">
+      <span class="login-mark" aria-hidden="true"><span class="icon icon-lock"></span></span>
       <h2>管理员登录</h2>
       <label for="token">管理员密钥</label>
-      <div class="row"><input id="token" type="password" autocomplete="current-password" required><button class="primary">登录</button></div>
+      <input id="token" type="password" autocomplete="current-password" placeholder="输入管理员密钥" required>
+      <button class="primary">登录</button>
     </form>
     <section id="manager" hidden aria-label="文件管理">
-      <div class="toolbar">
-        <form id="search" class="row"><input name="q" type="search" placeholder="搜索文件或目录" aria-label="搜索名称"><input name="tag" type="search" placeholder="筛选标签" aria-label="筛选标签"><button>搜索</button></form>
-        <div class="row"><button id="settings">设置</button><button id="new-folder">新建目录</button><button id="choose-files" class="primary">上传文件</button></div>
-        <input id="file-input" type="file" multiple hidden>
-      </div>
-      <nav id="breadcrumbs" aria-label="目录路径"></nav>
-      <div id="drop-zone">
-        <ul id="entries"></ul>
-        <p id="empty" hidden>这里还没有文件。可点击上传，或将文件拖到这里。</p>
-      </div>
-      <div id="pagination" class="row" hidden>
-        <button id="previous">上一页</button><span id="page"></span><button id="next">下一页</button>
+      <aside class="sidebar" aria-label="云盘导航">
+        <button id="go-root" class="nav-current"><span class="icon icon-folder" aria-hidden="true"></span>文件</button>
+        <button id="settings"><span class="icon icon-settings" aria-hidden="true">⚙</span>设置</button>
+      </aside>
+      <div class="workspace">
+        <div class="toolbar workspace-heading">
+          <h2>文件</h2>
+          <div class="row">
+            <button id="new-folder"><span aria-hidden="true">＋</span> 新建目录</button>
+            <button id="choose-files" class="primary"><span aria-hidden="true">↑</span> 上传文件</button>
+          </div>
+          <input id="file-input" type="file" multiple hidden>
+        </div>
+        <form id="search" class="row">
+          <label class="search-field"><span class="icon icon-search" aria-hidden="true"></span><input name="q" type="search" placeholder="搜索文件或目录" aria-label="搜索名称"></label>
+          <input name="tag" type="search" placeholder="筛选标签" aria-label="筛选标签">
+          <button>搜索</button>
+        </form>
+        <nav id="breadcrumbs" aria-label="目录路径"></nav>
+        <div id="drop-zone">
+          <div class="list-heading" aria-hidden="true"><span>名称</span><span>操作</span></div>
+          <ul id="entries"></ul>
+          <div id="empty" hidden>
+            <span class="empty-mark" aria-hidden="true"><span class="icon icon-folder"></span></span>
+            <p id="empty-message"></p>
+          </div>
+        </div>
+        <div id="pagination" class="row" hidden>
+          <button id="previous">上一页</button><span id="page"></span><button id="next">下一页</button>
+        </div>
       </div>
     </section>
     <p id="notice" role="status" aria-live="polite"></p>
   </main>
-  <dialog id="settings-dialog">
+  <dialog id="settings-dialog" aria-labelledby="settings-title">
     <form id="settings-form">
-      <h2>站点设置</h2>
+      <h2 id="settings-title">站点设置</h2>
       <label>站点名称<input name="title" required maxlength="60"></label>
       <label>站点描述<input name="description" maxlength="200"></label>
       <label>单文件上传上限（MiB）<input name="maxUploadMiB" type="number" min="1" max="20" required></label>
-      <div class="row"><button type="button" data-close>取消</button><button class="primary">保存</button></div>
+      <div class="row dialog-actions"><button type="button" data-close>取消</button><button class="primary">保存</button></div>
     </form>
   </dialog>
-  <dialog id="preview-dialog">
+  <dialog id="preview-dialog" aria-labelledby="preview-name">
     <div class="toolbar"><h2 id="preview-name"></h2><button data-close>关闭</button></div>
     <img id="preview-image" alt="">
   </dialog>
