@@ -76,8 +76,8 @@ function validName(value) {
 
 async function database(env) {
   const db = env.DB;
-  const exists = await db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'entries'").first();
-  if (!exists) {
+  const { results: fields } = await db.prepare("PRAGMA table_info(entries)").all();
+  if (!fields.length) {
     await db.batch([
       db.prepare(`CREATE TABLE IF NOT EXISTS entries (
         id TEXT PRIMARY KEY,
@@ -88,6 +88,7 @@ async function database(env) {
         size INTEGER,
         telegram_file_id TEXT,
         telegram_message_id TEXT,
+        telegram_chat_id TEXT,
         tags TEXT NOT NULL DEFAULT '[]',
         share_token TEXT UNIQUE,
         created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -95,6 +96,12 @@ async function database(env) {
       )`),
       db.prepare("CREATE INDEX IF NOT EXISTS entries_parent_active ON entries(parent_id, kind, created_at DESC, id) WHERE deleted_at IS NULL")
     ]);
+  } else if (!fields.some(({ name }) => name === "telegram_chat_id")) {
+    try {
+      await db.prepare("ALTER TABLE entries ADD COLUMN telegram_chat_id TEXT").run();
+    } catch (error) {
+      if (!/duplicate column name: telegram_chat_id/i.test(error.message)) throw error;
+    }
   }
   return db;
 }
@@ -128,13 +135,13 @@ async function list(db, url) {
   });
 }
 
-async function createEntry(db, { parent, kind, name, mime = null, size = null, fileId = null, messageId = null }) {
+async function createEntry(db, { parent, kind, name, mime = null, size = null, fileId = null, messageId = null, chatId = null }) {
   const id = crypto.randomUUID();
   const result = await db.prepare(`INSERT INTO entries
-    (id, parent_id, kind, name, mime, size, telegram_file_id, telegram_message_id)
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?
+    (id, parent_id, kind, name, mime, size, telegram_file_id, telegram_message_id, telegram_chat_id)
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
     WHERE ? IS NULL OR EXISTS (SELECT 1 FROM entries WHERE id = ? AND kind = 'folder' AND deleted_at IS NULL)`)
-    .bind(id, parent, kind, name, mime, size, fileId, messageId, parent, parent).run();
+    .bind(id, parent, kind, name, mime, size, fileId, messageId, chatId, parent, parent).run();
   if (!result.meta.changes) throw new HttpError(404, "目录已不存在");
   return json({ id }, 201);
 }
@@ -199,7 +206,8 @@ async function upload(request, db, env, url) {
   if (!message.document?.file_id) throw new HttpError(502, "文件保存失败，请稍后重试");
   return createEntry(db, {
     parent, kind: "file", name, mime, size,
-    fileId: message.document.file_id, messageId: String(message.message_id)
+    fileId: message.document.file_id, messageId: String(message.message_id),
+    chatId: String(message.chat?.id ?? env.TELEGRAM_STORAGE_CHAT_ID)
   });
 }
 
@@ -258,17 +266,58 @@ async function updateEntry(db, id, body) {
   return json({ ok: true });
 }
 
-async function removeEntry(db, id) {
-  const { meta } = await db.prepare(`WITH RECURSIVE descendants(id) AS (
+async function removeEntry(db, id, env, legacyMode) {
+  const tree = `WITH RECURSIVE descendants(id) AS (
     SELECT id FROM entries WHERE id = ? AND deleted_at IS NULL
     UNION ALL
     SELECT entries.id FROM entries JOIN descendants ON entries.parent_id = descendants.id
     WHERE entries.deleted_at IS NULL
-  )
-  UPDATE entries SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), share_token = NULL
-  WHERE id IN (SELECT id FROM descendants)`).bind(id).run();
-  if (!meta.changes) throw new HttpError(404, "项目不存在");
-  return new Response(null, { status: 204 });
+  )`;
+  const legacy = `SELECT 1 FROM entries JOIN descendants USING (id)
+    WHERE kind = 'file' AND telegram_chat_id IS NULL AND telegram_message_id IS NOT NULL`;
+  const { results } = await db.prepare(`${tree}
+    UPDATE entries SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), share_token = NULL
+    WHERE id IN (SELECT id FROM descendants)
+      AND (? OR NOT EXISTS (${legacy}))
+    RETURNING kind, telegram_chat_id, telegram_message_id, created_at`)
+    .bind(id, Number(legacyMode === "current" || legacyMode === "skip")).all();
+  if (!results.length) {
+    if (await db.prepare(`${tree} ${legacy} LIMIT 1`).bind(id).first()) {
+      return json({ code: "LEGACY_DESTINATION", error: "部分旧文件未记录原始存储位置" }, 409);
+    }
+    throw new HttpError(404, "项目不存在");
+  }
+
+  const files = results.filter((entry) => entry.kind === "file");
+  const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+  const groups = new Map();
+  for (const file of files) {
+    if (Date.parse(file.created_at) <= cutoff) continue;
+    const chatId = file.telegram_chat_id ?? (legacyMode === "current" ? env.TELEGRAM_STORAGE_CHAT_ID : null);
+    const messageId = Number(file.telegram_message_id);
+    if (!/^-?\d+$/.test(chatId ?? "") || !Number.isSafeInteger(messageId) || messageId < 1) continue;
+    if (!groups.has(chatId)) groups.set(chatId, new Set());
+    groups.get(chatId).add(messageId);
+  }
+  let confirmed = 0;
+  let requestsLeft = 40;
+  for (const [chatId, group] of groups) {
+    const messages = [...group];
+    for (let start = 0; start < messages.length && requestsLeft > 0; start += 100) {
+      const batch = messages.slice(start, start + 100);
+      requestsLeft -= 1;
+      try {
+        const single = batch.length === 1;
+        const parameters = single ? { message_id: String(batch[0]) } : { message_ids: JSON.stringify(batch) };
+        const success = await telegram(env, single ? "deleteMessage" : "deleteMessages",
+          new URLSearchParams({ chat_id: chatId, ...parameters }));
+        if (success === true) confirmed += batch.length;
+      } catch {
+        // Keep the drive deletion and report original messages that could not be confirmed.
+      }
+    }
+  }
+  return json({ removed: results.length, originalConfirmed: confirmed, originalUnconfirmed: files.length - confirmed });
 }
 
 async function handle(request, env) {
@@ -305,7 +354,7 @@ async function handle(request, env) {
   if (entry) {
     if (entry[2] && method === "GET") return content(db, env, "id", entry[1], entry[2] === "/preview");
     if (!entry[2] && method === "PATCH") return updateEntry(db, entry[1], await bodyJson(request));
-    if (!entry[2] && method === "DELETE") return removeEntry(db, entry[1]);
+    if (!entry[2] && method === "DELETE") return removeEntry(db, entry[1], env, url.searchParams.get("legacy"));
   }
   throw new HttpError(404, "接口不存在");
 }

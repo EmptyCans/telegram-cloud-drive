@@ -25,9 +25,9 @@ async function api(path, options = {}, responseType = "json") {
   }
   const response = await fetch(path, { ...options, headers });
   if (!response.ok) {
-    const { error } = await response.json().catch(() => ({}));
+    const { error, code } = await response.json().catch(() => ({}));
     if (response.status === 401) loggedOut();
-    throw new Error(error ?? "请求失败（" + response.status + "）");
+    throw Object.assign(new Error(error ?? "请求失败（" + response.status + "）"), { code });
   }
   if (response.status === 204) return;
   return responseType === "blob" ? response.blob() : response.json();
@@ -139,6 +139,26 @@ async function share(item) {
   }
 }
 
+async function remove(item) {
+  const path = itemPath(item);
+  const options = { method: "DELETE" };
+  let result;
+  try {
+    result = await api(path, options);
+  } catch (error) {
+    if (error.code !== "LEGACY_DESTINATION") throw error;
+    const same = confirm("部分旧文件未记录原始存储位置。只有这些文件确实存放在当前配置的位置时，才点击确定同步删除。");
+    if (!same && !confirm("从云盘移除这些旧文件，保留它们的原始消息？")) return;
+    result = await api(path + "?legacy=" + (same ? "current" : "skip"), options);
+  }
+  const { removed, originalConfirmed, originalUnconfirmed } = result;
+  let message = "已从云盘移除 " + removed + " 项";
+  if (originalConfirmed) message += "，已确认清除 " + originalConfirmed + " 条原始消息";
+  if (originalUnconfirmed) message += "，" + originalUnconfirmed + " 条原始消息未确认删除，请到原位置检查";
+  notice(message, originalUnconfirmed > 0);
+  await refresh();
+}
+
 function renderItem(item) {
   const folder = item.kind === "folder";
   const image = item.mime?.startsWith("image/");
@@ -177,10 +197,11 @@ function renderItem(item) {
       if (value !== null) await update(item, { tags: value.split(/[,，]/).map((part) => part.trim()).filter(Boolean) });
     }),
     button("删除", async () => {
-      const message = folder ? "删除此目录和其中的所有项目？" : "删除此文件并撤销分享链接？";
+      const message = folder
+        ? "删除此目录及所有子项目，并尝试同步删除原始消息？"
+        : "删除此文件、撤销分享链接，并尝试同步删除原始消息？";
       if (!confirm(message)) return;
-      await api(itemPath(item), { method: "DELETE" });
-      await refresh();
+      await remove(item);
     })
   );
   li.append(name, actions);
