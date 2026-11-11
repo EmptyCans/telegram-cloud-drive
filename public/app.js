@@ -10,6 +10,8 @@ let tag = "";
 let listing = 0;
 let uploading = false;
 let previewUrl;
+let draggedItem;
+const entryDragType = "application/x-cloud-drive-entry";
 
 function notice(message = "", error = false) {
   $("notice").textContent = message;
@@ -103,6 +105,31 @@ function itemPath(item) {
   return "/api/entries/" + item.id;
 }
 
+function moveTarget(element, parent, label) {
+  const canDrop = (event) => draggedItem && event.dataTransfer.types.includes(entryDragType) &&
+    draggedItem.id !== parent && draggedItem.parent_id !== parent;
+  element.addEventListener("dragover", (event) => {
+    if (!canDrop(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    element.classList.add("move-target");
+  });
+  element.addEventListener("dragleave", (event) => {
+    if (!element.contains(event.relatedTarget)) element.classList.remove("move-target");
+  });
+  element.addEventListener("drop", action(async (event) => {
+    if (!canDrop(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    element.classList.remove("move-target");
+    const item = draggedItem;
+    if (event.dataTransfer.getData(entryDragType) !== item.id) return;
+    await api(itemPath(item), { method: "PATCH", json: { parent } });
+    notice("已将「" + item.name + "」移到「" + label + "」");
+    await refresh();
+  }));
+}
+
 async function update(item, data) {
   const result = await api(itemPath(item), { method: "PATCH", json: data });
   await refresh();
@@ -169,6 +196,19 @@ function renderItem(item) {
   const folder = item.kind === "folder";
   const image = item.mime?.startsWith("image/");
   const li = document.createElement("li");
+  li.draggable = true;
+  li.addEventListener("dragstart", (event) => {
+    draggedItem = item;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData(entryDragType, item.id);
+    li.classList.add("drag-source");
+  });
+  li.addEventListener("dragend", () => {
+    draggedItem = undefined;
+    li.classList.remove("drag-source");
+    document.querySelectorAll(".move-target").forEach((target) => target.classList.remove("move-target"));
+  });
+  if (folder) moveTarget(li, item.id, item.name);
   const tile = document.createElement("span");
   tile.className = "file-tile" + (folder ? " folder-tile" : "");
   tile.setAttribute("aria-hidden", "true");
@@ -247,13 +287,17 @@ async function refresh() {
     return refresh();
   }
   const crumbs = $("breadcrumbs");
-  crumbs.replaceChildren(button("根目录", goRoot));
+  const root = button("根目录", goRoot);
+  moveTarget(root, null, "根目录");
+  crumbs.replaceChildren(root);
   for (const [index, folder] of folders.entries()) {
-    crumbs.append(" / ", button(folder.name, async () => {
+    const crumb = button(folder.name, async () => {
       folders = folders.slice(0, index + 1);
       resetFilters();
       await refresh();
-    }));
+    });
+    moveTarget(crumb, folder.id, folder.name);
+    crumbs.append(" / ", crumb);
   }
   if (query || tag) crumbs.append(" / 全局搜索");
   $("entries").replaceChildren(...result.entries.map(renderItem));
@@ -303,6 +347,7 @@ $("login").addEventListener("submit", action(async (event) => {
 }));
 $("logout").addEventListener("click", () => { loggedOut(); notice(); });
 $("go-root").addEventListener("click", action(goRoot));
+moveTarget($("go-root"), null, "根目录");
 document.addEventListener("click", (event) => {
   for (const menu of document.querySelectorAll(".actions details[open]")) {
     if (!menu.contains(event.target)) menu.open = false;
@@ -339,13 +384,16 @@ $("file-input").addEventListener("change", action(async (event) => {
   await upload(files);
 }));
 $("drop-zone").addEventListener("dragover", (event) => {
+  if (!event.dataTransfer.types.includes("Files")) return;
   event.preventDefault();
+  event.dataTransfer.dropEffect = "copy";
   $("drop-zone").classList.add("drag");
 });
 $("drop-zone").addEventListener("dragleave", (event) => {
   if (!$("drop-zone").contains(event.relatedTarget)) $("drop-zone").classList.remove("drag");
 });
 $("drop-zone").addEventListener("drop", action(async (event) => {
+  if (!event.dataTransfer.types.includes("Files")) return;
   event.preventDefault();
   $("drop-zone").classList.remove("drag");
   await upload(Array.from(event.dataTransfer.files));

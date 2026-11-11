@@ -239,7 +239,30 @@ async function content(db, env, column, id, preview) {
   });
 }
 
+async function moveEntry(db, id, parent) {
+  if (parent !== null && (typeof parent !== "string" || !/^[a-f0-9-]{36}$/.test(parent))) {
+    throw new HttpError(400, "目标目录无效");
+  }
+  const moved = await db.prepare(`WITH RECURSIVE ancestors(id, parent_id) AS (
+    SELECT id, parent_id FROM entries WHERE id = ?1 AND kind = 'folder' AND deleted_at IS NULL
+    UNION
+    SELECT entries.id, entries.parent_id FROM entries JOIN ancestors ON entries.id = ancestors.parent_id
+    WHERE entries.deleted_at IS NULL
+  )
+  UPDATE entries SET parent_id = ?1
+  WHERE id = ?2 AND deleted_at IS NULL AND (
+    ?1 IS NULL OR (
+      EXISTS (SELECT 1 FROM ancestors WHERE id = ?1)
+      AND NOT EXISTS (SELECT 1 FROM ancestors WHERE id = ?2)
+    )
+  )
+  RETURNING id`).bind(parent, id).first();
+  if (!moved) throw new HttpError(409, "无法移动：项目或目标目录已不存在，或者目标目录位于该项目内");
+  return json({ ok: true });
+}
+
 async function updateEntry(db, id, body) {
+  if (body?.parent !== undefined) return moveEntry(db, id, body.parent);
   if (body?.share !== undefined) {
     if (typeof body.share !== "boolean") throw new HttpError(400, "无效的分享设置");
     const item = await db.prepare(`UPDATE entries
