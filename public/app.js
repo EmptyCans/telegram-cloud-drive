@@ -329,13 +329,14 @@ async function download(item) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function openHtml(item) {
+function openDocument(item, extension) {
   const tab = window.open("about:blank", "_blank");
   if (!tab) throw new Error("浏览器拦截了新标签页，请允许弹出窗口后重试。");
   tab.opener = null;
   tab.sessionStorage.setItem("cloud-drive-token", token);
   const url = new URL("/html-preview", location.origin);
   url.searchParams.set("id", item.id);
+  if (extension === "pdf") url.searchParams.set("type", "pdf");
   tab.location.replace(url);
 }
 
@@ -548,8 +549,8 @@ function renderItem(item) {
   const folder = item.kind === "folder";
   const extension = item.name.match(/\.([^.]+)$/)?.[1].toLowerCase();
   const type = mediaType(item);
-  const openPreview = extension === "html" || extension === "htm"
-    ? () => openHtml(item)
+  const openPreview = extension === "html" || extension === "htm" || extension === "pdf"
+    ? () => openDocument(item, extension)
     : type ? () => preview(item, type) : null;
   const li = document.createElement("li");
   li.dataset.entryId = item.id;

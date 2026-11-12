@@ -90,14 +90,15 @@ async function preview(item, type) {
 function renderEntry(item) {
   const row = document.createElement("li");
   const isFolder = item.kind === "folder";
-  const html = !isFolder && /\.html?$/i.test(item.name);
+  const pdf = /\.pdf$/i.test(item.name);
+  const documentPreview = !isFolder && (pdf || /\.html?$/i.test(item.name));
   const type = mediaType(item);
-  const open = document.createElement(!isFolder && !html && type ? "button" : "a");
+  const open = document.createElement(!isFolder && !documentPreview && type ? "button" : "a");
   open.className = "inbox-tile";
   open.title = item.name;
   const icon = document.createElement("span");
   icon.className = "inbox-icon " + (isFolder ? "inbox-folder-icon" : "inbox-file-icon");
-  if (!isFolder && !html && (type?.startsWith("image/") || type?.startsWith("video/"))) {
+  if (!isFolder && !documentPreview && (type?.startsWith("image/") || type?.startsWith("video/"))) {
     icon.dataset.coverType = type;
     icon.dataset.coverSource = fileAddress(item);
   }
@@ -111,10 +112,11 @@ function renderEntry(item) {
   row.append(open);
   if (isFolder) {
     open.href = folderAddress(item.id);
-  } else if (html || type) {
-    if (html) {
+  } else if (documentPreview || type) {
+    if (documentPreview) {
       const url = new URL("/html-preview", location.origin);
       url.searchParams.set("id", item.id);
+      if (pdf) url.searchParams.set("type", "pdf");
       url.hash = token;
       open.href = url.href;
       open.target = "_blank";
