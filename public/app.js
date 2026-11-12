@@ -321,6 +321,8 @@ function openHtml(item) {
 }
 
 const mediaTypes = new Map([
+  ["jpg", "image/jpeg"], ["jpeg", "image/jpeg"], ["png", "image/png"],
+  ["gif", "image/gif"], ["webp", "image/webp"], ["avif", "image/avif"],
   ["mp4", "video/mp4"], ["m4v", "video/mp4"], ["mov", "video/quicktime"],
   ["webm", "video/webm"], ["ogv", "video/ogg"],
   ["mp3", "audio/mpeg"], ["wav", "audio/wav"], ["m4a", "audio/mp4"],
@@ -428,7 +430,9 @@ function renderItem(item) {
   const folder = item.kind === "folder";
   const extension = item.name.match(/\.([^.]+)$/)?.[1].toLowerCase();
   const type = item.mime?.startsWith("image/") ? item.mime : mediaTypes.get(extension);
-  const html = /\.html?$/i.test(item.name);
+  const openPreview = extension === "html" || extension === "htm"
+    ? () => openHtml(item)
+    : type ? () => preview(item, type) : null;
   const li = document.createElement("li");
   li.draggable = true;
   li.addEventListener("dragstart", (event) => {
@@ -454,11 +458,7 @@ function renderItem(item) {
   tile.append(icon);
   const name = document.createElement("div");
   name.className = "entry-name";
-  const open = button(item.name, async () => {
-    if (!folder && html) return openHtml(item);
-    if (!folder) return type ? preview(item, type) : download(item);
-    await openFolder(item);
-  });
+  const open = button(item.name, folder ? () => openFolder(item) : openPreview ?? (() => download(item)));
   open.className = "entry-title";
   name.append(open);
   const meta = document.createElement("div");
@@ -492,6 +492,7 @@ function renderItem(item) {
   details.append(summary, menu);
   if (!folder) {
     actions.append(button("下载", () => download(item)));
+    if (openPreview) menu.append(button("预览", openPreview));
     menu.append(button(item.share_token ? "复制链接" : "分享", () => share(item)));
     if (item.share_token) menu.append(button("撤销链接", () => update(item, { share: false })));
   }
@@ -513,7 +514,8 @@ function renderItem(item) {
   menu.addEventListener("click", () => { details.open = false; });
   actions.append(details);
   li.append(tile, name, actions);
-  if (folder) {
+  if (folder || openPreview) {
+    li.classList.add("entry-openable");
     li.addEventListener("click", (event) => {
       if (open.hidden || open.contains(event.target) || actions.contains(event.target)) return;
       open.click();
