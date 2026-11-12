@@ -13,6 +13,7 @@ let tag = "";
 let listing = 0;
 let uploading = false;
 let previewUrl;
+let previewRequest;
 let draggedItem;
 let uploadTarget;
 const entryDragType = "application/x-cloud-drive-entry";
@@ -319,14 +320,71 @@ function openHtml(item) {
   tab.location.replace(url);
 }
 
-async function preview(item) {
-  const blob = await api(itemPath(item) + "/preview", {}, "blob");
+const mediaTypes = new Map([
+  ["mp4", "video/mp4"], ["m4v", "video/mp4"], ["mov", "video/quicktime"],
+  ["webm", "video/webm"], ["ogv", "video/ogg"],
+  ["mp3", "audio/mpeg"], ["wav", "audio/wav"], ["m4a", "audio/mp4"],
+  ["aac", "audio/aac"], ["ogg", "audio/ogg"], ["opus", "audio/ogg"],
+  ["flac", "audio/flac"], ["weba", "audio/webm"]
+]);
+
+function clearPreview() {
+  previewRequest?.abort();
+  previewRequest = undefined;
+  const content = $("preview-content");
+  const media = content.querySelector("audio, video");
+  if (media) {
+    media.pause();
+    media.removeAttribute("src");
+    media.load();
+  }
+  content.replaceChildren();
   if (previewUrl) URL.revokeObjectURL(previewUrl);
-  previewUrl = URL.createObjectURL(blob);
+  previewUrl = undefined;
+}
+
+async function preview(item, type) {
+  clearPreview();
+  const request = new AbortController();
+  previewRequest = request;
+  const dialog = $("preview-dialog");
+  const status = $("preview-status");
+  const kind = type.split("/")[0];
+  const element = document.createElement(kind === "image" ? "img" : kind);
+  if (kind === "image") {
+    element.alt = item.name;
+  } else {
+    element.controls = true;
+    element.preload = "metadata";
+    if (kind === "video") element.playsInline = true;
+  }
+  element.hidden = true;
+  element.addEventListener(kind === "image" ? "load" : "loadedmetadata", () => {
+    if (previewRequest !== request) return;
+    element.hidden = false;
+    status.textContent = "";
+  });
+  element.addEventListener("error", () => {
+    if (previewRequest !== request) return;
+    element.hidden = true;
+    status.textContent = "浏览器无法预览这个文件，请下载后打开。";
+  });
+
   $("preview-name").textContent = item.name;
-  $("preview-image").src = previewUrl;
-  $("preview-image").alt = item.name;
-  if (!$("preview-dialog").open) $("preview-dialog").showModal();
+  status.textContent = "正在加载预览…";
+  if (!dialog.open) dialog.showModal();
+  try {
+    const path = kind === "image" ? "/preview" : "/download";
+    const blob = await api(itemPath(item) + path, { signal: request.signal }, "blob");
+    if (request.signal.aborted || !dialog.open) return;
+    previewUrl = URL.createObjectURL(blob.slice(0, blob.size, type));
+    $("preview-content").append(element);
+    element.src = previewUrl;
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    if (!request.signal.aborted && dialog.open) status.textContent = error.message;
+    if (!token) notice(error.message, true);
+  }
 }
 
 async function share(item) {
@@ -368,7 +426,8 @@ async function remove(item) {
 
 function renderItem(item) {
   const folder = item.kind === "folder";
-  const image = item.mime?.startsWith("image/");
+  const extension = item.name.match(/\.([^.]+)$/)?.[1].toLowerCase();
+  const type = item.mime?.startsWith("image/") ? item.mime : mediaTypes.get(extension);
   const html = /\.html?$/i.test(item.name);
   const li = document.createElement("li");
   li.draggable = true;
@@ -397,7 +456,7 @@ function renderItem(item) {
   name.className = "entry-name";
   const open = button(item.name, async () => {
     if (!folder && html) return openHtml(item);
-    if (!folder) return image ? preview(item) : download(item);
+    if (!folder) return type ? preview(item, type) : download(item);
     await openFolder(item);
   });
   open.className = "entry-title";
@@ -627,9 +686,7 @@ for (const close of document.querySelectorAll("[data-close]")) {
   close.addEventListener("click", () => close.closest("dialog").close());
 }
 $("preview-dialog").addEventListener("close", () => {
-  if (previewUrl) URL.revokeObjectURL(previewUrl);
-  previewUrl = undefined;
-  $("preview-image").removeAttribute("src");
+  if (!$("preview-dialog").open) clearPreview();
 });
 api("/api/config").then(applyConfig).catch((error) => notice(error.message, true));
 if (token) action(loggedIn)();

@@ -197,8 +197,12 @@ dialog { width: min(92vw, 490px); background: var(--surface); color: inherit; bo
 dialog::backdrop { background: var(--backdrop); }
 dialog label { display: grid; gap: 6px; margin: 16px 0; font-weight: 600; }
 .dialog-actions { justify-content: flex-end; margin-top: 23px; }
-#preview-dialog { width: fit-content; max-width: 94vw; }
-#preview-image { display: block; max-width: 100%; max-height: 75vh; margin: 12px auto 0; object-fit: contain; border-radius: 9px; }
+#preview-dialog { width: fit-content; min-width: min(320px, 92vw); max-width: 94vw; }
+#preview-status:not(:empty) { margin-top: 12px; }
+#preview-content :is(img, video, audio) { display: block; max-width: 100%; margin: 12px auto 0; }
+#preview-content :is(img, video) { max-height: 75dvh; object-fit: contain; border-radius: 9px; }
+#preview-content video { width: min(760px, 82vw); background: #000; }
+#preview-content audio { width: min(440px, 80vw); }
 
 .icon { display: inline-block; position: relative; width: 17px; height: 17px; flex: none; }
 .icon-cloud { width: 21px; height: 9px; margin-top: 6px; border: 1.7px solid currentColor; border-radius: 8px; }
