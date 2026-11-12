@@ -3,7 +3,9 @@ const downloadLimit = 20 * MiB;
 const defaults = { title: "云盘", description: "", maxUploadMiB: 20 };
 const configKey = "site:config";
 const imageTypes = new Set(["image/jpeg", "image/png", "image/gif", "image/webp", "image/avif"]);
-const columns = "id, parent_id, kind, name, mime, size, tags, share_token, created_at";
+const columns = "id, parent_id, kind, name, mime, size, tags, share_token, share_expires_at, created_at";
+const activeShare = "(share_expires_at IS NULL OR share_expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))";
+const shareDurations = new Set([3600, 86400, 604800, 2592000]);
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -91,16 +93,20 @@ async function database(env) {
         telegram_chat_id TEXT,
         tags TEXT NOT NULL DEFAULT '[]',
         share_token TEXT UNIQUE,
+        share_expires_at TEXT,
         created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
         deleted_at TEXT
       )`),
       db.prepare("CREATE INDEX IF NOT EXISTS entries_parent_active ON entries(parent_id, kind, created_at DESC, id) WHERE deleted_at IS NULL")
     ]);
-  } else if (!fields.some(({ name }) => name === "telegram_chat_id")) {
-    try {
-      await db.prepare("ALTER TABLE entries ADD COLUMN telegram_chat_id TEXT").run();
-    } catch (error) {
-      if (!/duplicate column name: telegram_chat_id/i.test(error.message)) throw error;
+  } else {
+    for (const column of ["telegram_chat_id", "share_expires_at"]) {
+      if (fields.some(({ name }) => name === column)) continue;
+      try {
+        await db.prepare(`ALTER TABLE entries ADD COLUMN ${column} TEXT`).run();
+      } catch (error) {
+        if (!error.message.includes("duplicate column name: " + column)) throw error;
+      }
     }
   }
   return db;
@@ -145,14 +151,17 @@ async function list(db, url) {
   });
 }
 
-async function createEntry(db, { parent, kind, name, mime = null, size = null, fileId = null, messageId = null, chatId = null }) {
+async function createEntry(db, { parent, kind, name, mime = null, size = null, fileId = null, messageId = null, chatId = null, inboxToken = null }) {
   const id = crypto.randomUUID();
   const result = await db.prepare(`INSERT INTO entries
     (id, parent_id, kind, name, mime, size, telegram_file_id, telegram_message_id, telegram_chat_id)
     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
-    WHERE ? IS NULL OR EXISTS (SELECT 1 FROM entries WHERE id = ? AND kind = 'folder' AND deleted_at IS NULL)`)
-    .bind(id, parent, kind, name, mime, size, fileId, messageId, chatId, parent, parent).run();
-  if (!result.meta.changes) throw new HttpError(404, "目录已不存在");
+    WHERE ?2 IS NULL OR EXISTS (
+      SELECT 1 FROM entries WHERE id = ?2 AND kind = 'folder' AND deleted_at IS NULL
+      AND (?10 IS NULL OR (share_token = ?10 AND ${activeShare}))
+    )`)
+    .bind(id, parent, kind, name, mime, size, fileId, messageId, chatId, inboxToken).run();
+  if (!result.meta.changes) throw new HttpError(404, inboxToken ? "收件链接已失效" : "目录已不存在");
   return json({ id }, 201);
 }
 
@@ -178,9 +187,9 @@ async function telegram(env, method, body) {
   return data.result;
 }
 
-async function upload(request, db, env, url) {
+async function upload(request, db, env, url, inbox = null) {
   const name = validName(url.searchParams.get("name"));
-  const parent = url.searchParams.get("parent") || null;
+  const parent = inbox ? inbox.id : url.searchParams.get("parent") || null;
   const { maxUploadMiB } = await getConfig(env);
   const limit = maxUploadMiB * MiB;
   const tooLarge = () => new HttpError(413, `文件不能超过 ${maxUploadMiB} MiB`);
@@ -214,16 +223,25 @@ async function upload(request, db, env, url) {
   form.set("document", new Blob(chunks, { type: mime }), name);
   const message = await telegram(env, "sendDocument", form);
   if (!message.document?.file_id) throw new HttpError(502, "文件保存失败，请稍后重试");
-  return createEntry(db, {
-    parent, kind: "file", name, mime, size,
-    fileId: message.document.file_id, messageId: String(message.message_id),
-    chatId: String(message.chat?.id ?? env.TELEGRAM_STORAGE_CHAT_ID)
-  });
+  const messageId = String(message.message_id);
+  const chatId = String(message.chat?.id ?? env.TELEGRAM_STORAGE_CHAT_ID);
+  try {
+    return await createEntry(db, {
+      parent, kind: "file", name, mime, size, fileId: message.document.file_id,
+      messageId, chatId, inboxToken: inbox?.token
+    });
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 404) {
+      await telegram(env, "deleteMessage", new URLSearchParams({ chat_id: chatId, message_id: messageId })).catch(() => {});
+    }
+    throw error;
+  }
 }
 
 async function content(db, env, column, id, preview) {
+  const expiry = column === "share_token" ? `AND ${activeShare}` : "";
   const item = await db.prepare(
-    `SELECT name, mime, size, telegram_file_id FROM entries WHERE ${column} = ? AND kind = 'file' AND deleted_at IS NULL`
+    `SELECT name, mime, size, telegram_file_id FROM entries WHERE ${column} = ? AND kind = 'file' AND deleted_at IS NULL ${expiry}`
   ).bind(id).first();
   if (!item) throw new HttpError(404, "文件不存在或链接已失效");
   if (item.size > downloadLimit) throw new HttpError(413, "文件超过下载大小限制");
@@ -275,11 +293,15 @@ async function updateEntry(db, id, body) {
   if (body?.parent !== undefined) return moveEntry(db, id, body.parent);
   if (body?.share !== undefined) {
     if (typeof body.share !== "boolean") throw new HttpError(400, "无效的分享设置");
+    const duration = body.duration;
+    if (duration != null && !shareDurations.has(duration)) throw new HttpError(400, "无效的链接有效期");
+    const expires = duration ? new Date(Date.now() + duration * 1000).toISOString() : null;
     const item = await db.prepare(`UPDATE entries
-      SET share_token = CASE WHEN ? THEN coalesce(share_token, ?) ELSE NULL END
-      WHERE id = ? AND kind = 'file' AND deleted_at IS NULL RETURNING share_token`)
-      .bind(Number(body.share), crypto.randomUUID().replaceAll("-", ""), id).first();
-    if (!item) throw new HttpError(404, "文件不存在");
+      SET share_token = CASE WHEN ?1 THEN coalesce(share_token, ?2) ELSE NULL END,
+          share_expires_at = CASE WHEN NOT ?1 THEN NULL WHEN ?3 THEN ?4 ELSE share_expires_at END
+      WHERE id = ?5 AND deleted_at IS NULL RETURNING share_token, share_expires_at`)
+      .bind(Number(body.share), crypto.randomUUID().replaceAll("-", ""), Number(duration !== undefined), expires, id).first();
+    if (!item) throw new HttpError(404, "项目不存在");
     return json(item);
   }
   if (body?.name !== undefined) {
@@ -309,7 +331,7 @@ async function removeEntry(db, id, env, legacyMode) {
   const legacy = `SELECT 1 FROM entries JOIN descendants USING (id)
     WHERE kind = 'file' AND telegram_chat_id IS NULL AND telegram_message_id IS NOT NULL`;
   const { results } = await db.prepare(`${tree}
-    UPDATE entries SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), share_token = NULL
+    UPDATE entries SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), share_token = NULL, share_expires_at = NULL
     WHERE id IN (SELECT id FROM descendants)
       AND (? OR NOT EXISTS (${legacy}))
     RETURNING kind, telegram_chat_id, telegram_message_id, created_at`)
@@ -361,6 +383,16 @@ async function handle(request, env) {
   if (pathname === "/api/health" && method === "GET") return json({ status: "ok" });
   const shared = pathname.match(/^\/f\/([a-f0-9]{32})(\/preview)?$/);
   if (shared && method === "GET") return content(await database(env), env, "share_token", shared[1], !!shared[2]);
+  const inbox = pathname.match(/^\/api\/inbox\/([a-f0-9]{32})$/);
+  if (inbox && (method === "GET" || method === "POST")) {
+    const db = await database(env);
+    const folder = await db.prepare(`SELECT id, name FROM entries
+      WHERE share_token = ? AND kind = 'folder' AND deleted_at IS NULL AND ${activeShare}`).bind(inbox[1]).first();
+    if (!folder) throw new HttpError(404, "收件链接已失效");
+    if (method === "POST") return upload(request, db, env, url, { id: folder.id, token: inbox[1] });
+    const { maxUploadMiB } = await getConfig(env);
+    return json({ name: folder.name, maxUploadMiB });
+  }
   if (!pathname.startsWith("/api/")) throw new HttpError(404, "地址不存在");
   await requireAdmin(request, env);
   if (pathname === "/api/session" && method === "GET") return json({ ok: true });
@@ -375,6 +407,13 @@ async function handle(request, env) {
     return json(settings);
   }
   const db = await database(env);
+  if (pathname === "/api/links" && method === "GET") {
+    const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset"), 10) || 0);
+    const { results } = await db.prepare(`SELECT id, name, kind, mime, share_token, share_expires_at
+      FROM entries WHERE share_token IS NOT NULL AND deleted_at IS NULL
+      ORDER BY name COLLATE NOCASE, id LIMIT 51 OFFSET ?`).bind(offset).all();
+    return json({ links: results.slice(0, 50), hasMore: results.length > 50 });
+  }
   if (pathname === "/api/entries" && method === "GET") return list(db, url);
   if (pathname === "/api/folders" && method === "GET") {
     const { results } = await db.prepare(`SELECT id, parent_id, name FROM entries

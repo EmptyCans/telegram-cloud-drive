@@ -16,6 +16,9 @@ let previewUrl;
 let previewRequest;
 let draggedItem;
 let uploadTarget;
+let shareItem;
+let linksPage = 0;
+let linksListing = 0;
 const entryDragType = "application/x-cloud-drive-entry";
 
 function notice(message = "", error = false, item = null) {
@@ -92,6 +95,9 @@ function loggedOut() {
   $("entries").replaceChildren();
   $("folder-tree").replaceChildren();
   $("notices").replaceChildren();
+  $("links-list").replaceChildren();
+  linksListing += 1;
+  $("share-dialog").close();
   $("settings-dialog").close();
   $("preview-dialog").close();
   $("manager").hidden = $("account-actions").hidden = true;
@@ -107,6 +113,7 @@ async function loggedIn() {
   $("manager").hidden = $("account-actions").hidden = false;
   await loadFolderTree();
   await refresh();
+  await showLinksView();
 }
 
 function resetFilters() {
@@ -116,6 +123,7 @@ function resetFilters() {
 }
 
 async function goRoot() {
+  if (location.hash === "#links") location.hash = "";
   folders = [];
   resetFilters();
   await refresh();
@@ -134,6 +142,7 @@ function folderPath(id) {
 }
 
 async function openFolder(folder) {
+  if (location.hash === "#links") location.hash = "";
   const path = folderPath(folder.id);
   folders = path.length ? path : [folder];
   resetFilters();
@@ -389,19 +398,85 @@ async function preview(item, type) {
   }
 }
 
-async function share(item) {
-  let shareToken = item.share_token;
-  if (!shareToken) {
-    if (!confirm("生成公开链接？任何持有链接的人都可以读取这个文件。")) return;
-    ({ share_token: shareToken } = await update(item, { share: true }));
-  }
+function shareExpired(item) {
+  return !!item.share_expires_at && Date.parse(item.share_expires_at) <= Date.now();
+}
+
+function shareStatus(item) {
+  if (!item.share_expires_at) return "永久有效";
+  return (shareExpired(item) ? "已过期 · " : "到期时间 · ") + entryDateFormat.format(new Date(item.share_expires_at));
+}
+
+async function copyShare(item) {
+  if (shareExpired(item)) return editShare(item);
   const suffix = item.mime?.startsWith("image/") ? "/preview" : "";
-  const link = location.origin + "/f/" + shareToken + suffix;
+  const path = item.kind === "folder" ? "/inbox#" + item.share_token : "/f/" + item.share_token + suffix;
+  const link = location.origin + path;
   try {
     await navigator.clipboard.writeText(link);
     notice("已复制公开链接");
   } catch {
     prompt("复制公开链接", link);
+  }
+}
+
+function editShare(item) {
+  shareItem = item;
+  const inbox = item.kind === "folder";
+  $("share-title").textContent = inbox ? "公开收件 · " + item.name : "分享 · " + item.name;
+  const access = inbox ? "持有链接的人可以向此文件夹上传文件。" : "持有链接的人可以读取此文件。";
+  $("share-description").textContent = item.share_token ? access + " " + shareStatus(item) : access;
+  const duration = $("share-duration");
+  duration.options[0].hidden = !item.share_token || shareExpired(item);
+  duration.value = duration.options[0].hidden ? (inbox ? "604800" : "permanent") : "keep";
+  $("share-dialog").showModal();
+}
+
+async function revokeShare(item) {
+  if (!confirm("撤销「" + item.name + "」的公开链接？")) return;
+  await update(item, { share: false });
+  if (location.hash === "#links") await refreshLinks();
+  notice("已撤销「" + item.name + "」的链接");
+}
+
+async function refreshLinks() {
+  const sequence = ++linksListing;
+  const { links, hasMore } = await api("/api/links?offset=" + linksPage * pageSize);
+  if (sequence !== linksListing) return;
+  if (!links.length && linksPage > 0) {
+    linksPage -= 1;
+    return refreshLinks();
+  }
+  $("links-list").replaceChildren(...links.map((item) => {
+    const row = document.createElement("li");
+    const text = document.createElement("div");
+    const name = document.createElement("strong");
+    name.textContent = item.name;
+    const status = document.createElement("small");
+    status.textContent = (item.kind === "folder" ? "收件链接 · " : "文件分享 · ") + shareStatus(item);
+    text.append(name, status);
+    const actions = document.createElement("div");
+    actions.className = "row";
+    if (!shareExpired(item)) actions.append(button("复制链接", () => copyShare(item)));
+    actions.append(button("修改有效期", () => editShare(item)), button("撤销", () => revokeShare(item)));
+    row.append(text, actions);
+    return row;
+  }));
+  $("links-empty").hidden = links.length > 0;
+  $("links-pagination").hidden = !linksPage && !hasMore;
+  $("links-previous").disabled = linksPage === 0;
+  $("links-next").disabled = !hasMore;
+  $("links-page").textContent = "第 " + (linksPage + 1) + " 页";
+}
+
+async function showLinksView() {
+  if ($("manager").hidden) return;
+  const visible = location.hash === "#links";
+  $("file-view").hidden = visible;
+  $("links-view").hidden = !visible;
+  if (visible) {
+    linksPage = 0;
+    await refreshLinks();
   }
 }
 
@@ -493,8 +568,12 @@ function renderItem(item) {
   if (!folder) {
     actions.append(button("下载", () => download(item)));
     if (openPreview) menu.append(button("预览", openPreview));
-    menu.append(button(item.share_token ? "复制链接" : "分享", () => share(item)));
-    if (item.share_token) menu.append(button("撤销链接", () => update(item, { share: false })));
+  }
+  if (item.share_token) {
+    if (!shareExpired(item)) menu.append(button("复制链接", () => copyShare(item)));
+    menu.append(button("修改有效期", () => editShare(item)), button("撤销链接", () => revokeShare(item)));
+  } else {
+    menu.append(button(folder ? "公开收件" : "分享", () => editShare(item)));
   }
   menu.append(
     button("重命名", () => renameInline(item, open)),
@@ -601,6 +680,27 @@ $("login").addEventListener("submit", action(async (event) => {
   await loggedIn();
 }));
 $("logout").addEventListener("click", () => { loggedOut(); notice(); });
+$("manage-links").addEventListener("click", () => { location.hash = "links"; });
+$("back-to-files").addEventListener("click", () => { location.hash = ""; });
+window.addEventListener("hashchange", action(showLinksView));
+$("links-previous").addEventListener("click", action(async () => { linksPage -= 1; await refreshLinks(); }));
+$("links-next").addEventListener("click", action(async () => { linksPage += 1; await refreshLinks(); }));
+$("share-form").addEventListener("submit", action(async (event) => {
+  event.preventDefault();
+  const item = shareItem;
+  const value = $("share-duration").value;
+  const changes = { share: true };
+  if (value !== "keep") changes.duration = value === "permanent" ? null : Number(value);
+  $("save-share").disabled = true;
+  try {
+    const link = await update(item, changes);
+    $("share-dialog").close();
+    if (location.hash === "#links") await refreshLinks();
+    await copyShare({ ...item, ...link });
+  } finally {
+    $("save-share").disabled = false;
+  }
+}));
 $("go-root").addEventListener("click", action(goRoot));
 moveTarget($("go-root"), null, "根目录");
 document.addEventListener("click", (event) => {
