@@ -1,4 +1,5 @@
 import readWorkbook from "read-excel-file/browser";
+import { loadWorkbookPictures } from "./workbook-drawings.js";
 
 const rowsPerPage = 100;
 const columnsPerPage = 32;
@@ -27,7 +28,10 @@ function cellText(value) {
 }
 
 export async function renderWorkbook(blob) {
-  const sheets = await readWorkbook(blob);
+  const [sheets, picturesBySheet] = await Promise.all([
+    readWorkbook(blob),
+    loadWorkbookPictures(blob).catch(() => null),
+  ]);
   if (!sheets.length) throw new Error("工作簿没有可预览的工作表");
   const view = element("section");
   view.className = "workbook-preview";
@@ -57,6 +61,38 @@ export async function renderWorkbook(blob) {
   toolbar.append(previousRows, nextRows, previousColumns, nextColumns, summary);
   view.append(toolbar, grid);
 
+  function appendPictures(sheet) {
+    if (!picturesBySheet) {
+      grid.append(element("p", "无法读取工作表图片。"));
+      return;
+    }
+    const pictures = picturesBySheet.get(sheet) ?? [];
+    if (!pictures.length) return;
+    const section = element("section");
+    section.className = "workbook-pictures";
+    section.append(element("h2", "工作表图片"));
+    pictures.forEach(({ source, alt, bounds, labels }, index) => {
+      const figure = element("figure");
+      if (bounds) figure.style.width = bounds.width / 9525 + "px";
+      const image = element("img");
+      image.src = source;
+      image.alt = alt || `工作表图片 ${index + 1}`;
+      if (bounds) image.style.aspectRatio = bounds.width + " / " + bounds.height;
+      figure.append(image);
+      for (const { bounds: box, value, color } of labels) {
+        const label = element("span", value);
+        label.style.left = (box.x - bounds.x) / bounds.width * 100 + "%";
+        label.style.top = (box.y - bounds.y) / bounds.height * 100 + "%";
+        label.style.width = box.width / bounds.width * 100 + "%";
+        label.style.height = box.height / bounds.height * 100 + "%";
+        if (color) label.style.color = color;
+        figure.append(label);
+      }
+      section.append(figure);
+    });
+    grid.append(section);
+  }
+
   function render() {
     const { sheet, data } = sheets[Number(select.value)];
     const columnCount = data.reduce((width, row) => Math.max(width, row.length), 0);
@@ -72,7 +108,8 @@ export async function renderWorkbook(blob) {
     grid.scrollTo(0, 0);
     if (!data.length || !columnCount) {
       summary.textContent = "";
-      grid.append(element("p", "此工作表为空。"));
+      if (!picturesBySheet?.get(sheet)?.length) grid.append(element("p", "此工作表为空。"));
+      appendPictures(sheet);
       return;
     }
     summary.textContent = `第 ${rowOffset + 1}–${rowEnd} 行，共 ${data.length} 行 · ${columnName(columnOffset)}–${columnName(columnEnd - 1)} 列`;
@@ -96,6 +133,7 @@ export async function renderWorkbook(blob) {
       }
     }
     grid.append(table);
+    appendPictures(sheet);
   }
 
   select.addEventListener("change", () => {
