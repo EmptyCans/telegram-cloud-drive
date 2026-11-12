@@ -263,6 +263,34 @@ input::placeholder { color: var(--placeholder); }
 .inbox-list .inbox-file-art .file-symbol::before { width: 8px; height: 8px; }
 .inbox-list .inbox-file-art .file-symbol > span { font-size: 8px; }
 .inbox-list .inbox-download { flex: none; }
+.inbox-kind, .inbox-list-heading { display: none; }
+.inbox-list .inbox-kind { display: inline; }
+@media (min-width: 680px) {
+  .inbox-panel { --inbox-list-columns: 44px minmax(0, 1fr) 142px 70px 76px 42px; }
+  .inbox-list-heading:has(+ .inbox-list > li), .inbox-list li {
+    display: grid; grid-template-columns: var(--inbox-list-columns); gap: 8px; align-items: center;
+  }
+  .inbox-list-heading:has(+ .inbox-list > li) {
+    margin-top: 20px; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 12px 12px 0 0; background: var(--list-heading); color: var(--muted); font-size: 12px;
+  }
+  .inbox-list-heading > :first-child { grid-column: span 2; }
+  .inbox-list-heading > :nth-child(4) { text-align: right; }
+  .inbox-list-heading > :last-child { text-align: center; }
+  .inbox-list-heading:has(+ .inbox-list > li) + .inbox-list { margin-top: 0; border-top: 0; border-radius: 0 0 12px 12px; }
+  .inbox-panel .inbox-list .inbox-tile {
+    grid-column: 1 / 6; grid-template-columns: subgrid; column-gap: 8px; min-height: 44px; padding: 4px 0;
+  }
+  .inbox-list .inbox-art { grid-column: 1; height: 36px; }
+  .inbox-list .inbox-info, .inbox-list .inbox-meta { display: contents; }
+  .inbox-list :is(.inbox-name, .inbox-kind, .inbox-size, time) { grid-row: 1; min-width: 0; }
+  .inbox-list .inbox-name { grid-column: 2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .inbox-list .inbox-meta > * { color: var(--muted); font-size: 12px; }
+  .inbox-list time { grid-column: 3; }
+  .inbox-list .inbox-kind { grid-column: 4; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .inbox-list .inbox-size { grid-column: 5; justify-self: end; }
+  .inbox-list .inbox-download { grid-column: 6; justify-self: center; }
+}
 .inbox-art { display: grid; place-items: center; width: 100%; height: 76px; }
 .inbox-icon { position: relative; display: block; width: 56px; height: 44px; margin-top: 4px; }
 .inbox-folder-icon { border-radius: 7px; background: linear-gradient(#78c9ff, #2d8ce5); box-shadow: inset 0 1px #ffffff75, 0 3px 5px #132a4733; }

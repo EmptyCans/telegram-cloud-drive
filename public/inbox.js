@@ -122,8 +122,14 @@ function renderEntry(item) {
   info.append(name);
   const meta = document.createElement("span");
   meta.className = "inbox-meta";
+  const kind = document.createElement("span");
+  kind.className = "inbox-kind";
+  const extension = item.name.match(/\.([a-z\d]+)$/i)?.[1];
+  kind.textContent = isFolder ? "文件夹" : extension?.toUpperCase() ?? "文件";
+  meta.append(kind);
   if (!isFolder && Number.isFinite(item.size)) {
     const size = document.createElement("span");
+    size.className = "inbox-size";
     size.textContent = formatEntrySize(item.size);
     meta.append(size);
   }
@@ -133,7 +139,7 @@ function renderEntry(item) {
     time.textContent = entryDateFormat.format(new Date(item.created_at));
     meta.append(time);
   }
-  if (meta.childElementCount) info.append(meta);
+  info.append(meta);
   open.append(art, info);
   row.append(open);
   if (isFolder) {
