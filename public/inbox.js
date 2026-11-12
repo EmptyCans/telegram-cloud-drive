@@ -66,12 +66,8 @@ async function preview(item, type) {
     const blob = await response.blob();
     if (controller.signal.aborted || !dialog.open) return;
     const kind = type.split("/")[0];
-    const element = document.createElement(type === "text/html" ? "iframe" : kind === "image" ? "img" : kind);
-    if (type === "text/html") {
-      element.title = item.name;
-      element.setAttribute("sandbox", "allow-scripts");
-      element.referrerPolicy = "no-referrer";
-    } else if (kind === "image") {
+    const element = document.createElement(kind === "image" ? "img" : kind);
+    if (kind === "image") {
       element.alt = item.name;
     } else {
       element.controls = true;
@@ -92,8 +88,9 @@ async function preview(item, type) {
 function renderEntry(item) {
   const row = document.createElement("li");
   const isFolder = item.kind === "folder";
-  const type = /\.html?$/i.test(item.name) ? "text/html" : mediaType(item);
-  const open = document.createElement(!isFolder && type ? "button" : "a");
+  const html = !isFolder && /\.html?$/i.test(item.name);
+  const type = mediaType(item);
+  const open = document.createElement(!isFolder && !html && type ? "button" : "a");
   open.className = "inbox-tile";
   open.title = item.name;
   const icon = document.createElement("span");
@@ -105,9 +102,18 @@ function renderEntry(item) {
   row.append(open);
   if (isFolder) {
     open.href = folderAddress(item.id);
-  } else if (type) {
-    open.type = "button";
-    open.addEventListener("click", () => preview(item, type));
+  } else if (html || type) {
+    if (html) {
+      const url = new URL("/html-preview", location.origin);
+      url.searchParams.set("id", item.id);
+      url.hash = token;
+      open.href = url.href;
+      open.target = "_blank";
+      open.rel = "noopener noreferrer";
+    } else {
+      open.type = "button";
+      open.addEventListener("click", () => preview(item, type));
+    }
     const download = document.createElement("a");
     download.className = "inbox-download";
     download.href = fileAddress(item);
