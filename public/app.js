@@ -1,12 +1,12 @@
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
+import { entryDateFormat, formatEntrySize } from "./entry-format.js";
 import { bindViewSwitch } from "./view-switch.js";
 
 const $ = (id) => document.getElementById(id);
 const MiB = 1024 * 1024;
 const pageSize = 50;
-const entryDateFormat = new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" });
 let token = sessionStorage.getItem("cloud-drive-token") ?? "";
 let config = { title: "云盘", description: "", maxUploadMiB: 20 };
 let folders = [];
@@ -600,7 +600,7 @@ function renderItem(item) {
   meta.append(sharingBadge(item));
   if (!folder) {
     const size = document.createElement("small");
-    size.textContent = item.size >= MiB ? (item.size / MiB).toFixed(1) + " MiB" : Math.ceil(item.size / 1024) + " KiB";
+    size.textContent = formatEntrySize(item.size);
     meta.append(size);
   }
   if (item.created_at) {

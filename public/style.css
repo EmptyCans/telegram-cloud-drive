@@ -242,6 +242,13 @@ input::placeholder { color: var(--placeholder); }
 .inbox-grid li:hover, .inbox-grid li:focus-within { background: var(--row-hover); }
 .inbox-panel .inbox-tile { display: grid; justify-items: center; align-content: start; gap: 11px; width: 100%; min-height: 105px; border: 0; background: transparent; padding: 8px 5px 2px; color: var(--text); font-size: 13px; text-decoration: none; white-space: normal; overflow-wrap: anywhere; }
 .inbox-download { display: inline-block; margin: 4px 0; font-size: 12px; }
+.inbox-grid:not(.inbox-list) li { display: flex; flex-direction: column; align-items: center; }
+.inbox-panel .inbox-grid:not(.inbox-list) .inbox-tile { flex: 1; grid-template-rows: auto 1fr; }
+.inbox-info { display: flex; flex-direction: column; align-self: stretch; min-width: 0; }
+.inbox-name { font-weight: 600; }
+.inbox-meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 8px; margin-top: auto; padding-top: 4px; color: var(--muted); font-size: 12px; font-weight: 400; }
+.inbox-grid:not(.inbox-list) .inbox-meta time { flex-basis: 100%; }
+.inbox-list .inbox-meta { justify-content: flex-start; }
 .inbox-list { display: block; border: 1px solid var(--border); border-radius: 12px; }
 .inbox-list li { display: flex; align-items: center; gap: 8px; padding: 0 10px; text-align: left; }
 .inbox-list li + li { border-top: 1px solid var(--border); }

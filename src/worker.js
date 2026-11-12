@@ -425,7 +425,7 @@ async function publicFolder(request, db, env, url, token) {
   if (request.method === "POST") return upload(request, db, env, url, { id, token });
 
   const offset = Math.max(0, Math.min(1000000, Number.parseInt(url.searchParams.get("offset"), 10) || 0));
-  const { results } = await db.prepare(`SELECT id, kind, name, mime, size FROM entries
+  const { results } = await db.prepare(`SELECT id, kind, name, mime, size, created_at FROM entries
     WHERE parent_id = ?1 AND deleted_at IS NULL AND ${inboxContains("?1", "?2")}
     ORDER BY kind DESC, name COLLATE NOCASE, id LIMIT 51 OFFSET ?3`).bind(id, token, offset).all();
   const { maxUploadMiB } = await getConfig(env);

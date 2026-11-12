@@ -1,6 +1,7 @@
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
+import { entryDateFormat, formatEntrySize } from "./entry-format.js";
 import { bindViewSwitch } from "./view-switch.js";
 
 const $ = (id) => document.getElementById(id);
@@ -114,8 +115,26 @@ function renderEntry(item) {
   art.setAttribute("aria-hidden", "true");
   art.append(icon);
   const name = document.createElement("span");
+  name.className = "inbox-name";
   name.textContent = item.name;
-  open.append(art, name);
+  const info = document.createElement("span");
+  info.className = "inbox-info";
+  info.append(name);
+  const meta = document.createElement("span");
+  meta.className = "inbox-meta";
+  if (!isFolder && Number.isFinite(item.size)) {
+    const size = document.createElement("span");
+    size.textContent = formatEntrySize(item.size);
+    meta.append(size);
+  }
+  if (item.created_at) {
+    const time = document.createElement("time");
+    time.dateTime = item.created_at;
+    time.textContent = entryDateFormat.format(new Date(item.created_at));
+    meta.append(time);
+  }
+  if (meta.childElementCount) info.append(meta);
+  open.append(art, info);
   row.append(open);
   if (isFolder) {
     open.href = folderAddress(item.id);
