@@ -1,6 +1,7 @@
 const $ = (id) => document.getElementById(id);
 const MiB = 1024 * 1024;
 const pageSize = 50;
+const entryDateFormat = new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" });
 let token = sessionStorage.getItem("cloud-drive-token") ?? "";
 let config = { title: "云盘", description: "", maxUploadMiB: 20 };
 let folders = [];
@@ -232,6 +233,12 @@ function renderItem(item) {
     size.textContent = item.size >= MiB ? (item.size / MiB).toFixed(1) + " MiB" : Math.ceil(item.size / 1024) + " KiB";
     meta.append(size);
   }
+  if (item.created_at) {
+    const date = document.createElement("time");
+    date.dateTime = item.created_at;
+    date.textContent = entryDateFormat.format(new Date(item.created_at));
+    meta.append(date);
+  }
   for (const label of item.tags) {
     const chip = document.createElement("small");
     chip.textContent = label;
@@ -279,7 +286,9 @@ function renderItem(item) {
 
 async function refresh() {
   const sequence = ++listing;
-  const params = new URLSearchParams({ parent: currentFolder(), q: query, tag, offset: page * pageSize });
+  const params = new URLSearchParams({
+    parent: currentFolder(), q: query, tag, sort: $("sort").value, offset: page * pageSize
+  });
   const result = await api("/api/entries?" + params);
   if (sequence !== listing) return;
   if (!result.entries.length && page > 0) {
@@ -365,6 +374,10 @@ $("search").addEventListener("submit", action(async (event) => {
   const form = new FormData(event.target);
   query = form.get("q").trim();
   tag = form.get("tag").trim();
+  page = 0;
+  await refresh();
+}));
+$("sort").addEventListener("change", action(async () => {
   page = 0;
   await refresh();
 }));

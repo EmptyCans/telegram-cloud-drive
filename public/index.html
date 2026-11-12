@@ -45,7 +45,20 @@
           <input name="tag" type="search" placeholder="筛选标签" aria-label="筛选标签">
           <button>搜索</button>
         </form>
-        <nav id="breadcrumbs" aria-label="目录路径"></nav>
+        <div class="list-toolbar toolbar">
+          <nav id="breadcrumbs" aria-label="目录路径"></nav>
+          <div class="sort-control">
+            <label for="sort">排序</label>
+            <select id="sort">
+              <option value="created-desc">创建时间 · 最新</option>
+              <option value="created-asc">创建时间 · 最早</option>
+              <option value="name-asc">名称 · 升序</option>
+              <option value="name-desc">名称 · 降序</option>
+              <option value="size-desc">大小 · 从大到小</option>
+              <option value="size-asc">大小 · 从小到大</option>
+            </select>
+          </div>
+        </div>
         <div id="drop-zone">
           <div class="list-heading" aria-hidden="true"><span>名称</span><span>操作</span></div>
           <ul id="entries"></ul>

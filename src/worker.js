@@ -106,11 +106,21 @@ async function database(env) {
   return db;
 }
 
+const entrySort = new Map([
+  ["name-asc", "name COLLATE NOCASE ASC"],
+  ["name-desc", "name COLLATE NOCASE DESC"],
+  ["size-asc", "size ASC, name COLLATE NOCASE ASC"],
+  ["size-desc", "size DESC, name COLLATE NOCASE ASC"],
+  ["created-asc", "created_at ASC"],
+  ["created-desc", "created_at DESC"]
+]);
+
 async function list(db, url) {
   const q = (url.searchParams.get("q") ?? "").trim().slice(0, 120);
   const tag = (url.searchParams.get("tag") ?? "").trim().slice(0, 24);
   const parent = url.searchParams.get("parent") || null;
   const offset = Math.max(0, Math.min(1000000, Number.parseInt(url.searchParams.get("offset"), 10) || 0));
+  const order = entrySort.get(url.searchParams.get("sort")) ?? entrySort.get("created-desc");
   const conditions = ["deleted_at IS NULL"];
   const parameters = [];
   if (q) {
@@ -127,7 +137,7 @@ async function list(db, url) {
   }
   const { results } = await db.prepare(
     `SELECT ${columns} FROM entries WHERE ${conditions.join(" AND ")}
-     ORDER BY kind DESC, created_at DESC, id LIMIT 51 OFFSET ?`
+     ORDER BY kind DESC, ${order}, id LIMIT 51 OFFSET ?`
   ).bind(...parameters, offset).all();
   return json({
     entries: results.slice(0, 50).map((entry) => ({ ...entry, tags: JSON.parse(entry.tags) })),
