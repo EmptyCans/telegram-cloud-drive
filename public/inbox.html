@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <meta name="referrer" content="no-referrer">
-  <title>上传文件</title>
+  <title>公开文件夹</title>
   <link rel="icon" type="image/png" href="/favicon.png">
   <link rel="stylesheet" href="/style.css">
   <script type="module" src="/inbox.js"></script>
@@ -13,14 +13,30 @@
 <body>
   <main>
     <section class="inbox-panel" aria-labelledby="inbox-title">
-      <h1 id="inbox-title">上传文件</h1>
+      <div class="toolbar">
+        <h1 id="inbox-title">公开文件夹</h1>
+        <a id="inbox-up" hidden>返回上级</a>
+      </div>
       <form id="inbox-form" hidden>
         <label for="inbox-files" id="inbox-limit"></label>
         <input id="inbox-files" type="file" multiple required>
         <button id="inbox-submit" class="primary">上传</button>
       </form>
-      <p id="inbox-status" role="status">正在检查收件链接…</p>
+      <p id="inbox-status" role="status">正在加载文件夹…</p>
+      <ul id="inbox-entries" class="links-list"></ul>
+      <p id="inbox-empty" hidden>这个文件夹还没有文件。</p>
+      <div id="inbox-pagination" class="row" hidden>
+        <button id="inbox-previous">上一页</button><span id="inbox-page"></span><button id="inbox-next">下一页</button>
+      </div>
     </section>
   </main>
+  <dialog id="inbox-preview" aria-labelledby="inbox-preview-title">
+    <div class="toolbar">
+      <h2 id="inbox-preview-title"></h2>
+      <button id="inbox-preview-close">关闭</button>
+    </div>
+    <p id="preview-status" role="status"></p>
+    <div id="preview-content"></div>
+  </dialog>
 </body>
 </html>

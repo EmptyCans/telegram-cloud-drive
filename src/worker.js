@@ -7,6 +7,18 @@ const columns = "id, parent_id, kind, name, mime, size, tags, share_token, share
 const activeShare = "(share_expires_at IS NULL OR share_expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))";
 const shareDurations = new Set([3600, 86400, 604800, 2592000]);
 
+function inboxContains(folder, token) {
+  return `EXISTS (
+    WITH RECURSIVE ancestors(id, parent_id) AS (
+      SELECT id, parent_id FROM entries WHERE id = ${folder} AND kind = 'folder' AND deleted_at IS NULL
+      UNION
+      SELECT e.id, e.parent_id FROM entries e JOIN ancestors a ON e.id = a.parent_id
+      WHERE e.kind = 'folder' AND e.deleted_at IS NULL
+    )
+    SELECT 1 FROM ancestors JOIN entries USING (id) WHERE share_token = ${token} AND ${activeShare}
+  )`;
+}
+
 class HttpError extends Error {
   constructor(status, message) {
     super(message);
@@ -158,7 +170,7 @@ async function createEntry(db, { parent, kind, name, mime = null, size = null, f
     SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
     WHERE ?2 IS NULL OR EXISTS (
       SELECT 1 FROM entries WHERE id = ?2 AND kind = 'folder' AND deleted_at IS NULL
-      AND (?10 IS NULL OR (share_token = ?10 AND ${activeShare}))
+      AND (?10 IS NULL OR ${inboxContains("?2", "?10")})
     )`)
     .bind(id, parent, kind, name, mime, size, fileId, messageId, chatId, inboxToken).run();
   if (!result.meta.changes) throw new HttpError(404, inboxToken ? "收件链接已失效" : "目录已不存在");
@@ -182,7 +194,12 @@ async function telegram(env, method, body) {
   } catch {
     throw new HttpError(502, "文件服务连接失败，请稍后重试");
   }
-  if (response.status === 429) throw new HttpError(429, "文件操作过于频繁，请稍后重试");
+  if (response.status === 429) {
+    const seconds = data.parameters?.retry_after;
+    throw new HttpError(429, Number.isSafeInteger(seconds) && seconds > 0
+      ? "文件操作过于频繁，请在 " + seconds + " 秒后重试"
+      : "文件操作过于频繁，请稍后重试");
+  }
   if (!response.ok || !data.ok) throw new HttpError(502, "文件操作失败，请稍后重试");
   return data.result;
 }
@@ -238,11 +255,13 @@ async function upload(request, db, env, url, inbox = null) {
   }
 }
 
-async function content(db, env, column, id, preview) {
+async function content(db, env, column, id, preview, inboxToken = null) {
   const expiry = column === "share_token" ? `AND ${activeShare}` : "";
+  const scope = inboxToken ? `AND ${inboxContains("item.parent_id", "?2")}` : "";
   const item = await db.prepare(
-    `SELECT name, mime, size, telegram_file_id FROM entries WHERE ${column} = ? AND kind = 'file' AND deleted_at IS NULL ${expiry}`
-  ).bind(id).first();
+    `SELECT name, mime, size, telegram_file_id FROM entries AS item
+     WHERE ${column} = ?1 AND kind = 'file' AND deleted_at IS NULL ${expiry} ${scope}`
+  ).bind(...(inboxToken ? [id, inboxToken] : [id])).first();
   if (!item) throw new HttpError(404, "文件不存在或链接已失效");
   if (item.size > downloadLimit) throw new HttpError(413, "文件超过下载大小限制");
   const token = telegramToken(env);
@@ -375,6 +394,25 @@ async function removeEntry(db, id, env, legacyMode) {
   return json({ removed: results.length, originalConfirmed: confirmed, originalUnconfirmed: files.length - confirmed });
 }
 
+async function publicFolder(request, db, env, url, token) {
+  const root = await db.prepare(`SELECT id, name FROM entries
+    WHERE share_token = ? AND kind = 'folder' AND deleted_at IS NULL AND ${activeShare}`).bind(token).first();
+  if (!root) throw new HttpError(404, "公开文件夹链接已失效");
+  const id = url.searchParams.get("folder") || root.id;
+  const folder = id === root.id ? root : await db.prepare(`SELECT id, name, parent_id FROM entries
+    WHERE id = ?1 AND ${inboxContains("?1", "?2")}`).bind(id, token).first();
+  if (!folder) throw new HttpError(404, "文件夹不存在或已移出公开范围");
+  if (request.method === "POST") return upload(request, db, env, url, { id, token });
+
+  const offset = Math.max(0, Math.min(1000000, Number.parseInt(url.searchParams.get("offset"), 10) || 0));
+  const { results } = await db.prepare(`SELECT id, kind, name, mime, size FROM entries
+    WHERE parent_id = ?1 AND deleted_at IS NULL AND ${inboxContains("?1", "?2")}
+    ORDER BY kind DESC, name COLLATE NOCASE, id LIMIT 51 OFFSET ?3`).bind(id, token, offset).all();
+  const { maxUploadMiB } = await getConfig(env);
+  return json({ name: folder.name, parent: folder.parent_id ?? null, root: id === root.id,
+    entries: results.slice(0, 50), hasMore: results.length > 50, maxUploadMiB });
+}
+
 async function handle(request, env) {
   const url = new URL(request.url);
   const { pathname } = url;
@@ -383,15 +421,13 @@ async function handle(request, env) {
   if (pathname === "/api/health" && method === "GET") return json({ status: "ok" });
   const shared = pathname.match(/^\/f\/([a-f0-9]{32})(\/preview)?$/);
   if (shared && method === "GET") return content(await database(env), env, "share_token", shared[1], !!shared[2]);
+  const inboxFile = pathname.match(/^\/api\/inbox\/([a-f0-9]{32})\/([a-f0-9-]{36})\/download$/);
+  if (inboxFile && method === "GET") {
+    return content(await database(env), env, "id", inboxFile[2], false, inboxFile[1]);
+  }
   const inbox = pathname.match(/^\/api\/inbox\/([a-f0-9]{32})$/);
   if (inbox && (method === "GET" || method === "POST")) {
-    const db = await database(env);
-    const folder = await db.prepare(`SELECT id, name FROM entries
-      WHERE share_token = ? AND kind = 'folder' AND deleted_at IS NULL AND ${activeShare}`).bind(inbox[1]).first();
-    if (!folder) throw new HttpError(404, "收件链接已失效");
-    if (method === "POST") return upload(request, db, env, url, { id: folder.id, token: inbox[1] });
-    const { maxUploadMiB } = await getConfig(env);
-    return json({ name: folder.name, maxUploadMiB });
+    return publicFolder(request, await database(env), env, url, inbox[1]);
   }
   if (!pathname.startsWith("/api/")) throw new HttpError(404, "地址不存在");
   await requireAdmin(request, env);

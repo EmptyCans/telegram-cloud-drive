@@ -1,3 +1,5 @@
+import { mediaType } from "./media-types.js";
+
 const $ = (id) => document.getElementById(id);
 const MiB = 1024 * 1024;
 const pageSize = 50;
@@ -329,16 +331,6 @@ function openHtml(item) {
   tab.location.replace(url);
 }
 
-const mediaTypes = new Map([
-  ["jpg", "image/jpeg"], ["jpeg", "image/jpeg"], ["png", "image/png"],
-  ["gif", "image/gif"], ["webp", "image/webp"], ["avif", "image/avif"],
-  ["mp4", "video/mp4"], ["m4v", "video/mp4"], ["mov", "video/quicktime"],
-  ["webm", "video/webm"], ["ogv", "video/ogg"],
-  ["mp3", "audio/mpeg"], ["wav", "audio/wav"], ["m4a", "audio/mp4"],
-  ["aac", "audio/aac"], ["ogg", "audio/ogg"], ["opus", "audio/ogg"],
-  ["flac", "audio/flac"], ["weba", "audio/webm"]
-]);
-
 function clearPreview() {
   previewRequest?.abort();
   previewRequest = undefined;
@@ -423,8 +415,8 @@ async function copyShare(item) {
 function editShare(item) {
   shareItem = item;
   const inbox = item.kind === "folder";
-  $("share-title").textContent = inbox ? "公开收件 · " + item.name : "分享 · " + item.name;
-  const access = inbox ? "持有链接的人可以向此文件夹上传文件。" : "持有链接的人可以读取此文件。";
+  $("share-title").textContent = inbox ? "公开文件夹 · " + item.name : "分享 · " + item.name;
+  const access = inbox ? "持有链接的人可以浏览、下载及上传此文件夹及其子文件夹内的文件。" : "持有链接的人可以读取此文件。";
   $("share-description").textContent = item.share_token ? access + " " + shareStatus(item) : access;
   const duration = $("share-duration");
   duration.options[0].hidden = !item.share_token || shareExpired(item);
@@ -453,7 +445,7 @@ async function refreshLinks() {
     const name = document.createElement("strong");
     name.textContent = item.name;
     const status = document.createElement("small");
-    status.textContent = (item.kind === "folder" ? "收件链接 · " : "文件分享 · ") + shareStatus(item);
+    status.textContent = (item.kind === "folder" ? "公开文件夹 · " : "文件分享 · ") + shareStatus(item);
     text.append(name, status);
     const actions = document.createElement("div");
     actions.className = "row";
@@ -504,7 +496,7 @@ async function remove(item) {
 function renderItem(item) {
   const folder = item.kind === "folder";
   const extension = item.name.match(/\.([^.]+)$/)?.[1].toLowerCase();
-  const type = item.mime?.startsWith("image/") ? item.mime : mediaTypes.get(extension);
+  const type = mediaType(item);
   const openPreview = extension === "html" || extension === "htm"
     ? () => openHtml(item)
     : type ? () => preview(item, type) : null;
@@ -573,7 +565,7 @@ function renderItem(item) {
     if (!shareExpired(item)) menu.append(button("复制链接", () => copyShare(item)));
     menu.append(button("修改有效期", () => editShare(item)), button("撤销链接", () => revokeShare(item)));
   } else {
-    menu.append(button(folder ? "公开收件" : "分享", () => editShare(item)));
+    menu.append(button(folder ? "公开文件夹" : "分享", () => editShare(item)));
   }
   menu.append(
     button("重命名", () => renameInline(item, open)),
