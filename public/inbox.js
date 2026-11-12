@@ -1,4 +1,4 @@
-import { mediaType } from "./media-types.js";
+import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
 
 const $ = (id) => document.getElementById(id);
@@ -90,9 +90,8 @@ async function preview(item, type) {
 function renderEntry(item) {
   const row = document.createElement("li");
   const isFolder = item.kind === "folder";
-  const pdf = /\.pdf$/i.test(item.name);
-  const documentPreview = !isFolder && (pdf || /\.html?$/i.test(item.name));
-  const type = mediaType(item);
+  const type = previewType(item);
+  const documentPreview = !isFolder && isDocumentPreview(type);
   const open = document.createElement(!isFolder && !documentPreview && type ? "button" : "a");
   open.className = "inbox-tile";
   open.title = item.name;
@@ -116,7 +115,7 @@ function renderEntry(item) {
     if (documentPreview) {
       const url = new URL("/html-preview", location.origin);
       url.searchParams.set("id", item.id);
-      if (pdf) url.searchParams.set("type", "pdf");
+      if (type === "application/pdf") url.searchParams.set("type", "pdf");
       url.hash = token;
       open.href = url.href;
       open.target = "_blank";

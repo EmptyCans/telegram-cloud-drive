@@ -1,4 +1,5 @@
 const types = new Map([
+  ["pdf", "application/pdf"], ["html", "text/html"], ["htm", "text/html"],
   ["jpg", "image/jpeg"], ["jpeg", "image/jpeg"], ["png", "image/png"],
   ["gif", "image/gif"], ["webp", "image/webp"], ["avif", "image/avif"],
   ["mp4", "video/mp4"], ["m4v", "video/mp4"], ["mov", "video/quicktime"],
@@ -8,7 +9,15 @@ const types = new Map([
   ["flac", "audio/flac"], ["weba", "audio/webm"]
 ]);
 
-export function mediaType(item) {
+const images = new Set(["image/jpeg", "image/png", "image/gif", "image/webp", "image/avif"]);
+
+export function previewType(item) {
   const extension = item.name.match(/\.([^.]+)$/)?.[1].toLowerCase();
-  return item.mime?.startsWith("image/") ? item.mime : types.get(extension);
+  const type = types.get(extension);
+  if (isDocumentPreview(type)) return type;
+  return images.has(item.mime) ? item.mime : type;
+}
+
+export function isDocumentPreview(type) {
+  return type === "application/pdf" || type === "text/html";
 }

@@ -1,4 +1,4 @@
-import { mediaType } from "./media-types.js";
+import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
 
 const $ = (id) => document.getElementById(id);
@@ -329,14 +329,14 @@ async function download(item) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function openDocument(item, extension) {
+function openDocument(item, type) {
   const tab = window.open("about:blank", "_blank");
   if (!tab) throw new Error("浏览器拦截了新标签页，请允许弹出窗口后重试。");
   tab.opener = null;
   tab.sessionStorage.setItem("cloud-drive-token", token);
   const url = new URL("/html-preview", location.origin);
   url.searchParams.set("id", item.id);
-  if (extension === "pdf") url.searchParams.set("type", "pdf");
+  if (type === "application/pdf") url.searchParams.set("type", "pdf");
   tab.location.replace(url);
 }
 
@@ -429,7 +429,7 @@ function shareStatus(item) {
 }
 
 function shareAddress(item) {
-  const suffix = /\.pdf$/i.test(item.name) || mediaType(item)?.startsWith("image/") ? "/preview" : "";
+  const suffix = previewType(item) ? "/preview" : "";
   const path = item.kind === "folder" ? "/inbox#" + item.share_token : "/f/" + item.share_token + suffix;
   return location.origin + path;
 }
@@ -547,10 +547,9 @@ async function remove(item) {
 
 function renderItem(item) {
   const folder = item.kind === "folder";
-  const extension = item.name.match(/\.([^.]+)$/)?.[1].toLowerCase();
-  const type = mediaType(item);
-  const openPreview = extension === "html" || extension === "htm" || extension === "pdf"
-    ? () => openDocument(item, extension)
+  const type = previewType(item);
+  const openPreview = isDocumentPreview(type)
+    ? () => openDocument(item, type)
     : type ? () => preview(item, type) : null;
   const li = document.createElement("li");
   li.dataset.entryId = item.id;
