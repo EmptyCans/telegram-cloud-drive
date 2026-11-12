@@ -178,9 +178,13 @@ async function loadFolderTree() {
       const row = document.createElement("div");
       row.className = "tree-row";
       row.dataset.uploadParent = folder.id;
-      const open = button(folder.name, () => openFolder(folder));
+      const open = button("", () => openFolder(folder));
       open.className = "tree-folder";
       open.dataset.folderId = folder.id;
+      const name = document.createElement("span");
+      name.className = "tree-folder-name";
+      name.textContent = folder.name;
+      open.append(name, sharingBadge(folder));
       moveTarget(row, folder.id, folder.name);
       item.append(row);
       if (children.has(folder.id)) {
@@ -249,7 +253,7 @@ function moveTarget(element, parent, label) {
 
 async function update(item, data) {
   const result = await api(itemPath(item), { method: "PATCH", json: data });
-  if (item.kind === "folder" && data.name !== undefined) await loadFolderTree();
+  if (item.kind === "folder" && (data.name !== undefined || data.share !== undefined)) await loadFolderTree();
   await refresh();
   return result;
 }
@@ -396,6 +400,26 @@ async function preview(item, type) {
 
 function shareExpired(item) {
   return !!item.share_expires_at && Date.parse(item.share_expires_at) <= Date.now();
+}
+
+function sharingBadge(item) {
+  const hasLink = Boolean(item.share_token || item.has_share);
+  const directlyShared = hasLink && !shareExpired(item);
+  const inherited = !directlyShared && folderPath(item.parent_id).some(
+    (folder) => folder.has_share && !shareExpired(folder)
+  );
+  const badge = document.createElement("small");
+  badge.className = "sharing-badge";
+  if (directlyShared || inherited) {
+    badge.classList.add("is-shared");
+    badge.textContent = inherited ? "随目录公开" : item.kind === "file" ? "已分享" : "公开";
+  } else if (hasLink) {
+    badge.classList.add("is-expired");
+    badge.textContent = "已过期";
+  } else {
+    badge.textContent = "未分享";
+  }
+  return badge;
 }
 
 function shareStatus(item) {
@@ -562,6 +586,7 @@ function renderItem(item) {
   name.append(open);
   const meta = document.createElement("div");
   meta.className = "entry-meta";
+  meta.append(sharingBadge(item));
   if (!folder) {
     const size = document.createElement("small");
     size.textContent = item.size >= MiB ? (item.size / MiB).toFixed(1) + " MiB" : Math.ceil(item.size / 1024) + " KiB";
