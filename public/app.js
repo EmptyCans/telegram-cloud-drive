@@ -148,6 +148,30 @@ async function download(item) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+async function openHtml(item) {
+  const tab = window.open("about:blank", "_blank");
+  if (!tab) throw new Error("浏览器拦截了新标签页，请允许弹出窗口后重试。");
+  tab.opener = null;
+  const { document: page } = tab;
+  page.title = item.name;
+  page.body.textContent = "正在打开文件…";
+  try {
+    const blob = await api(itemPath(item) + "/download", {}, "blob");
+    if (tab.closed) return;
+    const frame = page.createElement("iframe");
+    frame.title = item.name;
+    frame.setAttribute("sandbox", "allow-scripts");
+    frame.referrerPolicy = "no-referrer";
+    frame.style.cssText = "display:block;width:100%;height:100vh;border:0";
+    frame.src = tab.URL.createObjectURL(blob.slice(0, blob.size, "text/html"));
+    page.body.style.margin = "0";
+    page.body.replaceChildren(frame);
+  } catch (error) {
+    if (!tab.closed) tab.close();
+    throw error;
+  }
+}
+
 async function preview(item) {
   const blob = await api(itemPath(item) + "/preview", {}, "blob");
   if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -197,6 +221,7 @@ async function remove(item) {
 function renderItem(item) {
   const folder = item.kind === "folder";
   const image = item.mime?.startsWith("image/");
+  const html = /\.html?$/i.test(item.name);
   const li = document.createElement("li");
   li.draggable = true;
   li.addEventListener("dragstart", (event) => {
@@ -223,6 +248,7 @@ function renderItem(item) {
   const name = document.createElement("div");
   name.className = "entry-name";
   const open = button(item.name, async () => {
+    if (!folder && html) return openHtml(item);
     if (!folder) return image ? preview(item) : download(item);
     folders = query || tag ? [item] : [...folders, item];
     resetFilters();
