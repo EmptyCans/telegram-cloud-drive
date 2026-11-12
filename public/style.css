@@ -178,9 +178,10 @@ input::placeholder { color: var(--placeholder); }
 #entries.entries-grid .actions { order: -1; align-self: flex-end; }
 #entries.entries-grid .file-tile { width: min(100%, 128px); height: 76px; flex: none; }
 #entries.entries-grid .folder-tile .icon { width: 30px; height: 30px; }
-#entries.entries-grid .entry-name { width: 100%; text-align: center; }
+#entries.entries-grid .entry-name { display: flex; flex: 1; flex-direction: column; align-items: center; width: 100%; text-align: center; }
 #entries.entries-grid .entry-title { text-align: center; }
-#entries.entries-grid .entry-meta { justify-content: center; }
+#entries.entries-grid .entry-meta { justify-content: center; width: 100%; margin-top: auto; padding-top: 6px; }
+#entries.entries-grid .entry-meta time { order: 1; flex-basis: 100%; }
 .file-tile { width: 48px; height: 38px; border-radius: 10px; }
 .folder-tile { color: var(--folder-icon); background: var(--folder-background); }
 .entry-title { border: 0; background: transparent; padding: 0; text-align: left; white-space: normal; overflow-wrap: anywhere; max-width: 100%; }
