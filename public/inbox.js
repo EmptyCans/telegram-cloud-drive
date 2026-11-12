@@ -1,5 +1,6 @@
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
+import { fileIcon } from "./file-icons.js";
 
 const $ = (id) => document.getElementById(id);
 const token = location.hash.slice(1);
@@ -96,7 +97,8 @@ function renderEntry(item) {
   open.className = "inbox-tile";
   open.title = item.name;
   const icon = document.createElement("span");
-  icon.className = "inbox-icon " + (isFolder ? "inbox-folder-icon" : "inbox-file-icon");
+  icon.className = "inbox-icon " + (isFolder ? "inbox-folder-icon" : "inbox-file-art");
+  if (!isFolder) icon.append(fileIcon(item.name, type));
   if (!isFolder && !documentPreview && (type?.startsWith("image/") || type?.startsWith("video/"))) {
     icon.dataset.coverType = type;
     icon.dataset.coverSource = fileAddress(item);

@@ -1,5 +1,6 @@
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
+import { fileIcon } from "./file-icons.js";
 
 const $ = (id) => document.getElementById(id);
 const MiB = 1024 * 1024;
@@ -576,9 +577,13 @@ function renderItem(item) {
     tile.dataset.coverType = type;
     tile.dataset.coverSource = itemPath(item) + "/download";
   }
-  const icon = document.createElement("span");
-  icon.className = "icon " + (folder ? "icon-folder" : "icon-file");
-  tile.append(icon);
+  if (folder) {
+    const icon = document.createElement("span");
+    icon.className = "icon icon-folder";
+    tile.append(icon);
+  } else {
+    tile.append(fileIcon(item.name, type));
+  }
   const name = document.createElement("div");
   name.className = "entry-name";
   const open = button(item.name, folder ? () => openFolder(item) : openPreview ?? (() => download(item)));
