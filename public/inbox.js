@@ -1,5 +1,5 @@
 import { mediaType } from "./media-types.js";
-import { observeCovers } from "./inbox-covers.js";
+import { observeCovers } from "./media-covers.js";
 
 const $ = (id) => document.getElementById(id);
 const token = location.hash.slice(1);
@@ -95,12 +95,12 @@ function renderEntry(item) {
   const open = document.createElement(!isFolder && !html && type ? "button" : "a");
   open.className = "inbox-tile";
   open.title = item.name;
-  if (!isFolder && !html && (type?.startsWith("image/") || type?.startsWith("video/"))) {
-    open.dataset.coverType = type;
-    open.dataset.coverSource = fileAddress(item);
-  }
   const icon = document.createElement("span");
   icon.className = "inbox-icon " + (isFolder ? "inbox-folder-icon" : "inbox-file-icon");
+  if (!isFolder && !html && (type?.startsWith("image/") || type?.startsWith("video/"))) {
+    icon.dataset.coverType = type;
+    icon.dataset.coverSource = fileAddress(item);
+  }
   const art = document.createElement("span");
   art.className = "inbox-art";
   art.setAttribute("aria-hidden", "true");

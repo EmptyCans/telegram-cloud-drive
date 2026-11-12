@@ -1,4 +1,5 @@
 import { mediaType } from "./media-types.js";
+import { observeCovers } from "./media-covers.js";
 
 const $ = (id) => document.getElementById(id);
 const MiB = 1024 * 1024;
@@ -16,6 +17,7 @@ let listing = 0;
 let uploading = false;
 let previewUrl;
 let previewRequest;
+let stopCovers;
 let draggedItem;
 let uploadTarget;
 let shareItem;
@@ -94,6 +96,8 @@ function loggedOut() {
   page = 0;
   query = tag = "";
   $("search").reset();
+  stopCovers?.();
+  stopCovers = undefined;
   $("entries").replaceChildren();
   $("folder-tree").replaceChildren();
   $("notices").replaceChildren();
@@ -520,6 +524,10 @@ function renderItem(item) {
   const tile = document.createElement("span");
   tile.className = "file-tile" + (folder ? " folder-tile" : "");
   tile.setAttribute("aria-hidden", "true");
+  if (!folder && (type?.startsWith("image/") || type?.startsWith("video/"))) {
+    tile.dataset.coverType = type;
+    tile.dataset.coverSource = itemPath(item) + "/download";
+  }
   const icon = document.createElement("span");
   icon.className = "icon " + (folder ? "icon-folder" : "icon-file");
   tile.append(icon);
@@ -621,7 +629,10 @@ async function refresh() {
     crumbs.append(" / ", crumb);
   }
   if (query || tag) crumbs.append(" / 全局搜索");
-  $("entries").replaceChildren(...result.entries.map(renderItem));
+  const entries = $("entries");
+  stopCovers?.();
+  entries.replaceChildren(...result.entries.map(renderItem));
+  stopCovers = observeCovers(entries, { Authorization: "Bearer " + token });
   $("empty").hidden = result.entries.length > 0;
   $("empty-message").textContent = query || tag ? "没有符合条件的项目。" : "将文件拖到这里，或点击「上传文件」。";
   $("pagination").hidden = !page && !result.hasMore;

@@ -55,7 +55,7 @@ async function makeCover(blob, type, signal) {
   }
 }
 
-export function observeCovers(grid) {
+export function observeCovers(grid, headers) {
   const controller = new AbortController();
   const { signal } = controller;
   const urls = new Set();
@@ -64,7 +64,7 @@ export function observeCovers(grid) {
 
   async function fill(tile) {
     const type = tile.dataset.coverType;
-    const response = await fetch(tile.dataset.coverSource, { credentials: "omit", signal });
+    const response = await fetch(tile.dataset.coverSource, { credentials: "omit", headers, signal });
     if (!response.ok) return;
     const cover = await makeCover(await response.blob(), type, signal);
     if (!cover || signal.aborted) return;
@@ -73,9 +73,10 @@ export function observeCovers(grid) {
     const image = document.createElement("img");
     image.alt = "";
     image.src = url;
-    const icon = tile.querySelector(".inbox-icon");
-    icon.className = "inbox-icon inbox-cover" + (type.startsWith("video/") ? " inbox-video-cover" : "");
-    icon.replaceChildren(image);
+    tile.classList.remove("inbox-file-icon");
+    tile.classList.add("media-cover");
+    tile.classList.toggle("video-cover", type.startsWith("video/"));
+    tile.replaceChildren(image);
   }
 
   function processQueue() {
