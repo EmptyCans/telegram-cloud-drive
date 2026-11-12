@@ -149,6 +149,9 @@ input::placeholder { color: var(--placeholder); }
 #breadcrumbs { flex: 1 1 160px; color: var(--muted); font-size: 13px; min-height: 31px; overflow-wrap: anywhere; }
 .sort-control { display: inline-flex; gap: 7px; align-items: center; margin-left: auto; color: var(--muted); font-size: 13px; }
 .sort-control select { padding: 5px 8px; color: var(--text); }
+#entry-view-switch { display: inline-flex; flex: none; padding: 2px; gap: 2px; border: 1px solid var(--border); border-radius: 9px; }
+#entry-view-switch button { padding: 4px 8px; border: 0; border-radius: 6px; font-size: 13px; }
+#entry-view-switch button[aria-pressed="true"] { color: var(--accent-strong); background: var(--accent-soft); }
 #breadcrumbs button { border: 0; padding: 4px 7px; color: var(--accent-strong); white-space: normal; max-width: 100%; }
 #drop-zone { min-height: 245px; border: 1px solid var(--border); border-radius: 13px; }
 #manager .upload-target { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft); }
@@ -167,6 +170,17 @@ input::placeholder { color: var(--placeholder); }
 #entries .drag-source { opacity: .55; }
 #manager .move-target { background: var(--accent-soft); outline: 2px solid var(--accent); outline-offset: -2px; }
 #entries li:last-child { border-radius: 0 0 12px 12px; }
+#entries.entries-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 10px; padding: 10px; }
+#entries.entries-grid > li {
+  display: flex; flex-direction: column; justify-content: flex-start; gap: 8px;
+  min-width: 0; padding: 8px 10px 12px; border: 1px solid var(--border); border-radius: 10px;
+}
+#entries.entries-grid .actions { order: -1; align-self: flex-end; }
+#entries.entries-grid .file-tile { width: min(100%, 128px); height: 76px; flex: none; }
+#entries.entries-grid .folder-tile .icon { width: 30px; height: 30px; }
+#entries.entries-grid .entry-name { width: 100%; text-align: center; }
+#entries.entries-grid .entry-title { text-align: center; }
+#entries.entries-grid .entry-meta { justify-content: center; }
 .file-tile { width: 48px; height: 38px; border-radius: 10px; }
 .folder-tile { color: var(--folder-icon); background: var(--folder-background); }
 .entry-title { border: 0; background: transparent; padding: 0; text-align: left; white-space: normal; overflow-wrap: anywhere; max-width: 100%; }

@@ -25,6 +25,25 @@ let shareItem;
 let linksPage = 0;
 let linksListing = 0;
 const entryDragType = "application/x-cloud-drive-entry";
+const entryViewKey = "cloud-drive-entry-view";
+const viewButtons = $("entry-view-switch").querySelectorAll("button");
+
+function setEntryView(view) {
+  const grid = view === "grid";
+  $("entries").classList.toggle("entries-grid", grid);
+  $("entries-heading").hidden = grid;
+  for (const button of viewButtons) {
+    button.setAttribute("aria-pressed", String(button.dataset.view === (grid ? "grid" : "list")));
+  }
+}
+
+setEntryView(localStorage.getItem(entryViewKey));
+for (const button of viewButtons) {
+  button.addEventListener("click", () => {
+    setEntryView(button.dataset.view);
+    localStorage.setItem(entryViewKey, button.dataset.view);
+  });
+}
 
 function notice(message = "", error = false, item = null) {
   if ($("manager").hidden) {
