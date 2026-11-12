@@ -1,4 +1,5 @@
 import { mediaType } from "./media-types.js";
+import { observeCovers } from "./inbox-covers.js";
 
 const $ = (id) => document.getElementById(id);
 const token = location.hash.slice(1);
@@ -14,6 +15,7 @@ let maxUploadMiB;
 let listing = 0;
 let previewUrl;
 let previewRequest;
+let stopCovers;
 
 function folderAddress(id) {
   const url = new URL("/inbox", location.origin);
@@ -93,12 +95,19 @@ function renderEntry(item) {
   const open = document.createElement(!isFolder && !html && type ? "button" : "a");
   open.className = "inbox-tile";
   open.title = item.name;
+  if (!isFolder && !html && (type?.startsWith("image/") || type?.startsWith("video/"))) {
+    open.dataset.coverType = type;
+    open.dataset.coverSource = fileAddress(item);
+  }
   const icon = document.createElement("span");
   icon.className = "inbox-icon " + (isFolder ? "inbox-folder-icon" : "inbox-file-icon");
-  icon.setAttribute("aria-hidden", "true");
+  const art = document.createElement("span");
+  art.className = "inbox-art";
+  art.setAttribute("aria-hidden", "true");
+  art.append(icon);
   const name = document.createElement("span");
   name.textContent = item.name;
-  open.append(icon, name);
+  open.append(art, name);
   row.append(open);
   if (isFolder) {
     open.href = folderAddress(item.id);
@@ -138,7 +147,10 @@ async function loadFolder() {
   const up = $("inbox-up");
   up.hidden = data.root;
   if (!data.root) up.href = folderAddress(data.parent);
-  $("inbox-entries").replaceChildren(...data.entries.map(renderEntry));
+  const grid = $("inbox-entries");
+  stopCovers?.();
+  grid.replaceChildren(...data.entries.map(renderEntry));
+  stopCovers = observeCovers(grid);
   $("inbox-empty").hidden = data.entries.length > 0;
   $("inbox-pagination").hidden = !page && !data.hasMore;
   $("inbox-previous").disabled = page === 0;
@@ -151,6 +163,7 @@ function folderError(error) {
   status.textContent = error.message;
   if (error.status === 404) {
     form.hidden = true;
+    stopCovers?.();
     $("inbox-entries").replaceChildren();
     $("inbox-empty").hidden = $("inbox-pagination").hidden = true;
   }
