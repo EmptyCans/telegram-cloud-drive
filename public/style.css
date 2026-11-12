@@ -151,6 +151,7 @@ input::placeholder { color: var(--placeholder); }
 #entries li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 13px; min-height: 62px; }
 #entries li + li { border-top: 1px solid var(--border); }
 #entries li:hover { background: var(--row-hover); }
+#entries .entry-located { background: var(--accent-soft); }
 #entries .entry-openable { cursor: pointer; }
 #entries li[draggable="true"] .entry-title, #entries li[draggable="true"] .file-tile { cursor: grab; }
 #entries .drag-source { opacity: .55; }
@@ -195,6 +196,10 @@ input::placeholder { color: var(--placeholder); }
 .links-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 0; border-top: 1px solid var(--border); }
 .links-list li > div:first-child { min-width: 0; overflow-wrap: anywhere; }
 .links-list small { display: block; margin-top: 3px; }
+.link-file-path { border: 0; background: transparent; padding: 0; color: var(--accent-strong); text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.link-file-path:hover { background: transparent; text-decoration: underline; }
+.links-actions a { padding: 8px 13px; border: 1px solid var(--border); border-radius: 10px; color: var(--accent-strong); text-decoration: none; font-weight: 600; }
+.links-actions a:hover { border-color: var(--hover-border); background: var(--hover); }
 #links-pagination { justify-content: flex-end; margin-top: 14px; }
 #share-description { margin-top: 10px; }
 .inbox-panel { max-width: 980px; margin: 22px auto; padding: clamp(16px, 4vw, 30px); background: var(--surface); border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow); }

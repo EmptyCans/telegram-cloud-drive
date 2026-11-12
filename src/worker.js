@@ -137,7 +137,8 @@ async function list(db, url) {
   const q = (url.searchParams.get("q") ?? "").trim().slice(0, 120);
   const tag = (url.searchParams.get("tag") ?? "").trim().slice(0, 24);
   const parent = url.searchParams.get("parent") || null;
-  const offset = Math.max(0, Math.min(1000000, Number.parseInt(url.searchParams.get("offset"), 10) || 0));
+  let offset = Math.max(0, Math.min(1000000, Number.parseInt(url.searchParams.get("offset"), 10) || 0));
+  const focus = url.searchParams.get("focus");
   const order = entrySort.get(url.searchParams.get("sort")) ?? entrySort.get("created-desc");
   const conditions = ["deleted_at IS NULL"];
   const parameters = [];
@@ -153,13 +154,23 @@ async function list(db, url) {
     conditions.push("EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?)");
     parameters.push(tag);
   }
+  const where = conditions.join(" AND ");
+  const sortOrder = `kind DESC, ${order}, id`;
+  if (focus) {
+    const match = await db.prepare(`SELECT position FROM (
+      SELECT id, row_number() OVER (ORDER BY ${sortOrder}) - 1 AS position
+      FROM entries WHERE ${where}
+    ) WHERE id = ?`).bind(...parameters, focus).first();
+    if (!match) throw new HttpError(404, "文件已移动或删除，请重新打开链接管理");
+    offset = Math.floor(match.position / 50) * 50;
+  }
   const { results } = await db.prepare(
-    `SELECT ${columns} FROM entries WHERE ${conditions.join(" AND ")}
-     ORDER BY kind DESC, ${order}, id LIMIT 51 OFFSET ?`
+    `SELECT ${columns} FROM entries WHERE ${where} ORDER BY ${sortOrder} LIMIT 51 OFFSET ?`
   ).bind(...parameters, offset).all();
   return json({
     entries: results.slice(0, 50).map((entry) => ({ ...entry, tags: JSON.parse(entry.tags) })),
-    hasMore: results.length > 50
+    hasMore: results.length > 50,
+    ...(focus ? { offset } : {})
   });
 }
 
@@ -445,7 +456,7 @@ async function handle(request, env) {
   const db = await database(env);
   if (pathname === "/api/links" && method === "GET") {
     const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset"), 10) || 0);
-    const { results } = await db.prepare(`SELECT id, name, kind, mime, share_token, share_expires_at
+    const { results } = await db.prepare(`SELECT id, parent_id, name, kind, mime, share_token, share_expires_at
       FROM entries WHERE share_token IS NOT NULL AND deleted_at IS NULL
       ORDER BY name COLLATE NOCASE, id LIMIT 51 OFFSET ?`).bind(offset).all();
     return json({ links: results.slice(0, 50), hasMore: results.length > 50 });

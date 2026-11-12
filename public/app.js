@@ -403,11 +403,15 @@ function shareStatus(item) {
   return (shareExpired(item) ? "已过期 · " : "到期时间 · ") + entryDateFormat.format(new Date(item.share_expires_at));
 }
 
-async function copyShare(item) {
-  if (shareExpired(item)) return editShare(item);
+function shareAddress(item) {
   const suffix = item.mime?.startsWith("image/") ? "/preview" : "";
   const path = item.kind === "folder" ? "/inbox#" + item.share_token : "/f/" + item.share_token + suffix;
-  const link = location.origin + path;
+  return location.origin + path;
+}
+
+async function copyShare(item) {
+  if (shareExpired(item)) return editShare(item);
+  const link = shareAddress(item);
   try {
     await navigator.clipboard.writeText(link);
     notice("已复制公开链接");
@@ -435,6 +439,15 @@ async function revokeShare(item) {
   notice("已撤销「" + item.name + "」的链接");
 }
 
+async function jumpToShareItem(item) {
+  if (item.kind === "folder") return openFolder(item);
+  folders = folderPath(item.parent_id);
+  resetFilters();
+  location.hash = "";
+  await showLinksView();
+  await refresh(item.id);
+}
+
 async function refreshLinks() {
   const sequence = ++linksListing;
   const { links, hasMore } = await api("/api/links?offset=" + linksPage * pageSize);
@@ -446,14 +459,23 @@ async function refreshLinks() {
   $("links-list").replaceChildren(...links.map((item) => {
     const row = document.createElement("li");
     const text = document.createElement("div");
-    const name = document.createElement("strong");
-    name.textContent = item.name;
+    const fullPath = "/" + [...folderPath(item.parent_id).map(({ name }) => name), item.name].join("/");
+    const name = button(fullPath, () => jumpToShareItem(item));
+    name.className = "link-file-path";
+    name.title = "定位到 " + fullPath;
     const status = document.createElement("small");
     status.textContent = (item.kind === "folder" ? "公开文件夹 · " : "文件分享 · ") + shareStatus(item);
     text.append(name, status);
     const actions = document.createElement("div");
-    actions.className = "row";
-    if (!shareExpired(item)) actions.append(button("复制链接", () => copyShare(item)));
+    actions.className = "row links-actions";
+    if (!shareExpired(item)) {
+      const open = document.createElement("a");
+      open.href = shareAddress(item);
+      open.target = "_blank";
+      open.rel = "noopener noreferrer";
+      open.textContent = "打开分享";
+      actions.append(open, button("复制链接", () => copyShare(item)));
+    }
     actions.append(button("修改有效期", () => editShare(item)), button("撤销", () => revokeShare(item)));
     row.append(text, actions);
     return row;
@@ -472,6 +494,7 @@ async function showLinksView() {
   $("links-view").hidden = !visible;
   if (visible) {
     linksPage = 0;
+    await loadFolderTree();
     await refreshLinks();
   }
 }
@@ -505,6 +528,7 @@ function renderItem(item) {
     ? () => openHtml(item)
     : type ? () => preview(item, type) : null;
   const li = document.createElement("li");
+  li.dataset.entryId = item.id;
   li.draggable = true;
   li.addEventListener("dragstart", (event) => {
     draggedItem = item;
@@ -603,13 +627,15 @@ function renderItem(item) {
   return li;
 }
 
-async function refresh() {
+async function refresh(focus = null) {
   const sequence = ++listing;
   const params = new URLSearchParams({
     parent: currentFolder(), q: query, tag, sort: $("sort").value, offset: page * pageSize
   });
+  if (focus) params.set("focus", focus);
   const result = await api("/api/entries?" + params);
   if (sequence !== listing) return;
+  if (focus) page = Math.floor(result.offset / pageSize);
   selectTreeFolder();
   if (!result.entries.length && page > 0) {
     page -= 1;
@@ -633,6 +659,12 @@ async function refresh() {
   stopCovers?.();
   entries.replaceChildren(...result.entries.map(renderItem));
   stopCovers = observeCovers(entries, { Authorization: "Bearer " + token });
+  if (focus) {
+    const row = Array.from(entries.children).find((entry) => entry.dataset.entryId === focus);
+    row?.classList.add("entry-located");
+    row?.scrollIntoView({ block: "nearest" });
+    row?.querySelector(".entry-title").focus({ preventScroll: true });
+  }
   $("empty").hidden = result.entries.length > 0;
   $("empty-message").textContent = query || tag ? "没有符合条件的项目。" : "将文件拖到这里，或点击「上传文件」。";
   $("pagination").hidden = !page && !result.hasMore;
