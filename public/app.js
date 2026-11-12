@@ -285,6 +285,12 @@ function renderItem(item) {
   menu.addEventListener("click", () => { details.open = false; });
   actions.append(details);
   li.append(tile, name, actions);
+  if (folder) {
+    li.addEventListener("click", (event) => {
+      if (open.contains(event.target) || actions.contains(event.target)) return;
+      open.click();
+    });
+  }
   return li;
 }
 
