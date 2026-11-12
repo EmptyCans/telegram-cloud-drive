@@ -1,8 +1,10 @@
 import readWorkbook from "read-excel-file/browser";
-import { loadWorkbookPictures } from "./workbook-drawings.js";
+import { loadWorkbookDetails } from "./workbook-drawings.js";
 
 const rowsPerPage = 100;
 const columnsPerPage = 32;
+const minimumGridRows = 8;
+const minimumGridColumns = 8;
 
 function element(tag, text) {
   const node = document.createElement(tag);
@@ -28,9 +30,9 @@ function cellText(value) {
 }
 
 export async function renderWorkbook(blob) {
-  const [sheets, picturesBySheet] = await Promise.all([
+  const [sheets, detailsBySheet] = await Promise.all([
     readWorkbook(blob),
-    loadWorkbookPictures(blob).catch(() => null),
+    loadWorkbookDetails(blob).catch(() => null),
   ]);
   if (!sheets.length) throw new Error("工作簿没有可预览的工作表");
   const view = element("section");
@@ -61,12 +63,11 @@ export async function renderWorkbook(blob) {
   toolbar.append(previousRows, nextRows, previousColumns, nextColumns, summary);
   view.append(toolbar, grid);
 
-  function appendPictures(sheet) {
-    if (!picturesBySheet) {
+  function appendPictures(pictures) {
+    if (!detailsBySheet) {
       grid.append(element("p", "无法读取工作表图片。"));
       return;
     }
-    const pictures = picturesBySheet.get(sheet) ?? [];
     if (!pictures.length) return;
     const section = element("section");
     section.className = "workbook-pictures";
@@ -95,24 +96,21 @@ export async function renderWorkbook(blob) {
 
   function render() {
     const { sheet, data } = sheets[Number(select.value)];
-    const columnCount = data.reduce((width, row) => Math.max(width, row.length), 0);
-    const rowEnd = Math.min(data.length, rowOffset + rowsPerPage);
+    const details = detailsBySheet?.get(sheet);
+    const dataColumns = data.reduce((width, row) => Math.max(width, row.length), 0);
+    const columnCount = Math.max(minimumGridColumns, dataColumns, details?.columnCount ?? 0);
+    const rowCount = Math.max(minimumGridRows, data.length, details?.rowCount ?? 0);
+    const rowEnd = Math.min(rowCount, rowOffset + rowsPerPage);
     const columnEnd = Math.min(columnCount, columnOffset + columnsPerPage);
-    previousRows.hidden = nextRows.hidden = data.length <= rowsPerPage;
+    previousRows.hidden = nextRows.hidden = rowCount <= rowsPerPage;
     previousColumns.hidden = nextColumns.hidden = columnCount <= columnsPerPage;
     previousRows.disabled = rowOffset === 0;
-    nextRows.disabled = rowEnd === data.length;
+    nextRows.disabled = rowEnd === rowCount;
     previousColumns.disabled = columnOffset === 0;
     nextColumns.disabled = columnEnd === columnCount;
     grid.replaceChildren();
     grid.scrollTo(0, 0);
-    if (!data.length || !columnCount) {
-      summary.textContent = "";
-      if (!picturesBySheet?.get(sheet)?.length) grid.append(element("p", "此工作表为空。"));
-      appendPictures(sheet);
-      return;
-    }
-    summary.textContent = `第 ${rowOffset + 1}–${rowEnd} 行，共 ${data.length} 行 · ${columnName(columnOffset)}–${columnName(columnEnd - 1)} 列`;
+    summary.textContent = `第 ${rowOffset + 1}–${rowEnd} 行 · ${columnName(columnOffset)}–${columnName(columnEnd - 1)} 列`;
     const table = element("table");
     table.setAttribute("aria-label", sheet);
     const headers = table.createTHead().insertRow();
@@ -129,11 +127,11 @@ export async function renderWorkbook(blob) {
       heading.scope = "row";
       row.append(heading);
       for (let column = columnOffset; column < columnEnd; column += 1) {
-        row.insertCell().textContent = cellText(data[index][column]);
+        row.insertCell().textContent = cellText(data[index]?.[column]);
       }
     }
     grid.append(table);
-    appendPictures(sheet);
+    appendPictures(details?.pictures ?? []);
   }
 
   select.addEventListener("change", () => {

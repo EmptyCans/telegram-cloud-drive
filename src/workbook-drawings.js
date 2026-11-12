@@ -32,7 +32,17 @@ function drawingBounds(shape, anchor, rowPosition) {
   return { x, y, width, height };
 }
 
-export async function loadWorkbookPictures(blob) {
+function sheetDimensions(sheet) {
+  const lastCell = child(sheet, "dimension")?.getAttribute("ref")?.split(":").pop();
+  const match = /^([A-Z]{1,3})([1-9]\d{0,6})$/.exec(lastCell ?? "");
+  if (!match) return {};
+  const columnCount = Array.from(match[1]).reduce((total, letter) => total * 26 + letter.charCodeAt(0) - 64, 0);
+  const rowCount = Number(match[2]);
+  if (columnCount > 16384 || rowCount > 1048576) return {};
+  return { rowCount, columnCount };
+}
+
+export async function loadWorkbookDetails(blob) {
   const zip = await JSZip.loadAsync(blob);
   const parser = new DOMParser();
   const pictureSources = new Map();
@@ -109,10 +119,12 @@ export async function loadWorkbookPictures(blob) {
   const targets = await relationships(workbookPath);
   return new Map(await Promise.all(children(child(workbook, "sheets"), "sheet").map(async sheet => {
     const path = targets.get(relationshipId(sheet, "id"));
-    if (!path || !zip.file(path)) return [sheet.getAttribute("name"), []];
+    const name = sheet.getAttribute("name");
+    if (!path || !zip.file(path)) return [name, { pictures: [] }];
     const xml = await readXml(path);
+    const dimensions = sheetDimensions(xml);
     const drawings = children(xml, "drawing");
-    if (!drawings.length) return [sheet.getAttribute("name"), []];
+    if (!drawings.length) return [name, { ...dimensions, pictures: [] }];
     const defaultHeight = Number(child(xml, "sheetFormatPr")?.getAttribute("defaultRowHeight")) || 15;
     const customRows = children(child(xml, "sheetData"), "row")
       .filter(row => row.hasAttribute("ht") || row.getAttribute("hidden") === "1")
@@ -124,6 +136,7 @@ export async function loadWorkbookPictures(blob) {
     }
     const sheetTargets = await relationships(path);
     const paths = drawings.map(node => sheetTargets.get(relationshipId(node, "id"))).filter(Boolean);
-    return [sheet.getAttribute("name"), (await Promise.all(paths.map(path => readDrawing(path, rowPosition)))).flat()];
+    const pictures = (await Promise.all(paths.map(path => readDrawing(path, rowPosition)))).flat();
+    return [name, { ...dimensions, pictures }];
   })));
 }
