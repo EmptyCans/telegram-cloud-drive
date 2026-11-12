@@ -5,15 +5,20 @@ async function loadPreview() {
   const params = new URLSearchParams(location.search);
   const id = params.get("id");
   const pdf = params.get("type") === "pdf";
-  if (!id || !/^[a-f0-9-]{36}$/.test(id)) throw new Error("文件地址无效。");
-  const share = location.hash.slice(1);
+  const fragment = location.hash.slice(1);
+  const fileShare = pdf && fragment.startsWith("file=") ? fragment.slice(5) : null;
+  const share = fileShare === null ? fragment : "";
+  if (fileShare === null && !/^[a-f0-9-]{36}$/.test(id ?? "")) throw new Error("文件地址无效。");
+  if (fileShare !== null && !/^[a-f0-9]{32}$/.test(fileShare)) throw new Error("文件分享链接无效。");
   if (share && !/^[a-f0-9]{32}$/.test(share)) throw new Error("公开文件夹链接无效。");
-  const token = share ? null : sessionStorage.getItem("cloud-drive-token");
-  if (!share && !token) throw new Error("请登录云盘后重新打开该文件。");
+  const publicAccess = Boolean(share || fileShare);
+  const token = publicAccess ? null : sessionStorage.getItem("cloud-drive-token");
+  if (!publicAccess && !token) throw new Error("请登录云盘后重新打开该文件。");
 
-  const path = share ? "/api/inbox/" + share + "/" + id : "/api/entries/" + id;
-  const options = share ? { credentials: "omit" } : { headers: { Authorization: "Bearer " + token } };
-  const response = await fetch(path + "/download", options);
+  const path = fileShare ? "/f/" + fileShare
+    : share ? "/api/inbox/" + share + "/" + id + "/download" : "/api/entries/" + id + "/download";
+  const options = publicAccess ? { credentials: "omit" } : { headers: { Authorization: "Bearer " + token } };
+  const response = await fetch(path, options);
   if (!response.ok) {
     const { error } = await response.json().catch(() => ({}));
     throw new Error(error ?? "无法打开文件，请重试。");

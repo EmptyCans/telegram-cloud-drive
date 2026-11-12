@@ -429,7 +429,7 @@ function shareStatus(item) {
 }
 
 function shareAddress(item) {
-  const suffix = item.mime?.startsWith("image/") ? "/preview" : "";
+  const suffix = /\.pdf$/i.test(item.name) || mediaType(item)?.startsWith("image/") ? "/preview" : "";
   const path = item.kind === "folder" ? "/inbox#" + item.share_token : "/f/" + item.share_token + suffix;
   return location.origin + path;
 }

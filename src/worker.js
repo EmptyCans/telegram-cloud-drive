@@ -3,6 +3,10 @@ const downloadLimit = 20 * MiB;
 const defaults = { title: "云盘", description: "", maxUploadMiB: 20 };
 const configKey = "site:config";
 const imageTypes = new Set(["image/jpeg", "image/png", "image/gif", "image/webp", "image/avif"]);
+const imageExtensions = new Map([
+  ["jpg", "image/jpeg"], ["jpeg", "image/jpeg"], ["png", "image/png"],
+  ["gif", "image/gif"], ["webp", "image/webp"], ["avif", "image/avif"]
+]);
 const columns = "id, parent_id, kind, name, mime, size, tags, share_token, share_expires_at, created_at";
 const activeShare = "(share_expires_at IS NULL OR share_expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))";
 const shareDurations = new Set([3600, 86400, 604800, 2592000]);
@@ -275,6 +279,13 @@ async function content(db, env, column, id, preview, inboxToken = null) {
   ).bind(...(inboxToken ? [id, inboxToken] : [id])).first();
   if (!item) throw new HttpError(404, "文件不存在或链接已失效");
   if (item.size > downloadLimit) throw new HttpError(413, "文件超过下载大小限制");
+  const extension = item.name.match(/\.([^.]+)$/)?.[1].toLowerCase();
+  if (preview && column === "share_token" && extension === "pdf") {
+    return new Response(null, {
+      status: 302,
+      headers: { Location: "/html-preview?type=pdf#file=" + id, "Cache-Control": "no-store" }
+    });
+  }
   const token = telegramToken(env);
   const file = await telegram(env, "getFile", new URLSearchParams({ file_id: item.telegram_file_id }));
   if (typeof file.file_path !== "string" || !/^[\w./-]+$/.test(file.file_path) || file.file_path.split("/").includes("..")) {
@@ -283,13 +294,13 @@ async function content(db, env, column, id, preview, inboxToken = null) {
   const upstream = await fetch(`https://api.telegram.org/file/bot${token}/${file.file_path}`, { redirect: "manual" })
     .catch(() => null);
   if (!upstream?.ok || !upstream.body) throw new HttpError(502, "下载失败，请稍后重试");
-  const inline = preview && imageTypes.has(item.mime);
+  const inlineType = preview && (imageTypes.has(item.mime) ? item.mime : imageExtensions.get(extension));
   const encodedName = encodeURIComponent(item.name.toWellFormed()).replace(/['()*]/g, (character) =>
     "%" + character.charCodeAt(0).toString(16).toUpperCase());
   return new Response(upstream.body, {
     headers: {
-      "Content-Type": inline ? item.mime : "application/octet-stream",
-      "Content-Disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodedName}`,
+      "Content-Type": inlineType || "application/octet-stream",
+      "Content-Disposition": `${inlineType ? "inline" : "attachment"}; filename*=UTF-8''${encodedName}`,
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
       "Content-Security-Policy": "default-src 'none'; sandbox"
