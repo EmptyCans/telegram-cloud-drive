@@ -12,7 +12,7 @@
 
 | Secret | 值 |
 | --- | --- |
-| `ADMIN_TOKEN` | 至少 24 个字符的强随机管理员密钥，例如用 `openssl rand -hex 32` 生成 |
+| `ADMIN_TOKEN` | 至少 8 个字符的随机管理员密钥，例如用 `openssl rand -hex 8` 生成 16 个字符 |
 | `TELEGRAM_BOT_TOKEN` | 从 Telegram 的 `@BotFather` 获取 |
 | `TELEGRAM_STORAGE_CHAT_ID` | 数字频道 ID，例如 `-1001234567890`。将 Bot 加入频道并赋予发布消息权限 |
 

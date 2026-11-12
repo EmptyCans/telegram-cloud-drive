@@ -90,6 +90,7 @@ body:has(#manager[hidden]) main { padding-top: clamp(48px, 12vh, 128px); }
 .login-mark { width: 48px; height: 48px; margin-bottom: 17px; }
 #login label { display: block; margin: 24px 0 8px; font-size: 14px; font-weight: 650; }
 #login input, #login button { width: 100%; min-height: 46px; }
+#token-hint { margin-top: 6px; font-size: 13px; }
 #login button { margin-top: 18px; }
 
 button, input, select, summary { font: inherit; color: inherit; }

@@ -31,7 +31,7 @@ function json(data, status = 200) {
 }
 
 async function requireAdmin(request, env) {
-  if (!env.ADMIN_TOKEN || env.ADMIN_TOKEN.length < 24) {
+  if (!env.ADMIN_TOKEN || env.ADMIN_TOKEN.length < 8) {
     throw new HttpError(503, "登录暂不可用，请联系管理员");
   }
   const provided = request.headers.get("Authorization")?.match(/^Bearer (.+)$/i)?.[1];

@@ -29,7 +29,8 @@
       <span class="login-mark" aria-hidden="true"><span class="icon icon-lock"></span></span>
       <h2>管理员登录</h2>
       <label for="token">管理员密钥</label>
-      <input id="token" type="password" autocomplete="current-password" placeholder="输入管理员密钥" required>
+      <input id="token" type="password" autocomplete="current-password" placeholder="输入管理员密钥" minlength="8" aria-describedby="token-hint" required>
+      <p id="token-hint">管理员密钥至少 8 个字符。</p>
       <button class="primary">登录</button>
     </form>
     <section id="manager" hidden aria-label="文件管理">
