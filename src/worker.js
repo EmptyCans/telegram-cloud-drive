@@ -1,12 +1,10 @@
+import { previewType } from "../public/media-types.js";
+
 const MiB = 1024 * 1024;
 const downloadLimit = 20 * MiB;
 const defaults = { title: "云盘", description: "", maxUploadMiB: 20 };
 const configKey = "site:config";
 const imageTypes = new Set(["image/jpeg", "image/png", "image/gif", "image/webp", "image/avif"]);
-const imageExtensions = new Map([
-  ["jpg", "image/jpeg"], ["jpeg", "image/jpeg"], ["png", "image/png"],
-  ["gif", "image/gif"], ["webp", "image/webp"], ["avif", "image/avif"]
-]);
 const columns = "id, parent_id, kind, name, mime, size, tags, share_token, share_expires_at, created_at";
 const activeShare = "(share_expires_at IS NULL OR share_expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))";
 const shareDurations = new Set([3600, 86400, 604800, 2592000]);
@@ -279,11 +277,11 @@ async function content(db, env, column, id, preview, inboxToken = null) {
   ).bind(...(inboxToken ? [id, inboxToken] : [id])).first();
   if (!item) throw new HttpError(404, "文件不存在或链接已失效");
   if (item.size > downloadLimit) throw new HttpError(413, "文件超过下载大小限制");
-  const extension = item.name.match(/\.([^.]+)$/)?.[1].toLowerCase();
-  if (preview && column === "share_token" && extension === "pdf") {
+  const type = preview ? previewType(item) : undefined;
+  if (column === "share_token" && type && !imageTypes.has(type)) {
     return new Response(null, {
       status: 302,
-      headers: { Location: "/html-preview?type=pdf#file=" + id, "Cache-Control": "no-store" }
+      headers: { Location: "/html-preview#file=" + id, "Cache-Control": "no-store" }
     });
   }
   const token = telegramToken(env);
@@ -294,7 +292,7 @@ async function content(db, env, column, id, preview, inboxToken = null) {
   const upstream = await fetch(`https://api.telegram.org/file/bot${token}/${file.file_path}`, { redirect: "manual" })
     .catch(() => null);
   if (!upstream?.ok || !upstream.body) throw new HttpError(502, "下载失败，请稍后重试");
-  const inlineType = preview && (imageTypes.has(item.mime) ? item.mime : imageExtensions.get(extension));
+  const inlineType = imageTypes.has(type) ? type : null;
   const encodedName = encodeURIComponent(item.name.toWellFormed()).replace(/['()*]/g, (character) =>
     "%" + character.charCodeAt(0).toString(16).toUpperCase());
   return new Response(upstream.body, {
@@ -427,7 +425,7 @@ async function publicFolder(request, db, env, url, token) {
   if (request.method === "POST") return upload(request, db, env, url, { id, token });
 
   const offset = Math.max(0, Math.min(1000000, Number.parseInt(url.searchParams.get("offset"), 10) || 0));
-  const { results } = await db.prepare(`SELECT id, kind, name, mime, size FROM entries
+  const { results } = await db.prepare(`SELECT id, kind, name, mime, size, created_at FROM entries
     WHERE parent_id = ?1 AND deleted_at IS NULL AND ${inboxContains("?1", "?2")}
     ORDER BY kind DESC, name COLLATE NOCASE, id LIMIT 51 OFFSET ?3`).bind(id, token, offset).all();
   const { maxUploadMiB } = await getConfig(env);

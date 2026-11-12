@@ -1,10 +1,12 @@
-import { mediaType } from "./media-types.js";
+import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
+import { fileIcon } from "./file-icons.js";
+import { entryDateFormat, formatEntryKind, formatEntrySize } from "./entry-format.js";
+import { bindViewSwitch } from "./view-switch.js";
 
 const $ = (id) => document.getElementById(id);
 const MiB = 1024 * 1024;
 const pageSize = 50;
-const entryDateFormat = new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short" });
 let token = sessionStorage.getItem("cloud-drive-token") ?? "";
 let config = { title: "云盘", description: "", maxUploadMiB: 20 };
 let folders = [];
@@ -24,6 +26,11 @@ let shareItem;
 let linksPage = 0;
 let linksListing = 0;
 const entryDragType = "application/x-cloud-drive-entry";
+bindViewSwitch($("entry-view-switch"), "cloud-drive-entry-view", "list", (view) => {
+  const grid = view === "grid";
+  $("entries").classList.toggle("entries-grid", grid);
+  $("entries-heading").hidden = grid;
+});
 
 function notice(message = "", error = false, item = null) {
   if ($("manager").hidden) {
@@ -329,14 +336,14 @@ async function download(item) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function openDocument(item, extension) {
+function openDocument(item, type) {
   const tab = window.open("about:blank", "_blank");
   if (!tab) throw new Error("浏览器拦截了新标签页，请允许弹出窗口后重试。");
   tab.opener = null;
   tab.sessionStorage.setItem("cloud-drive-token", token);
   const url = new URL("/html-preview", location.origin);
   url.searchParams.set("id", item.id);
-  if (extension === "pdf") url.searchParams.set("type", "pdf");
+  if (type === "application/pdf") url.searchParams.set("type", "pdf");
   tab.location.replace(url);
 }
 
@@ -429,7 +436,7 @@ function shareStatus(item) {
 }
 
 function shareAddress(item) {
-  const suffix = /\.pdf$/i.test(item.name) || mediaType(item)?.startsWith("image/") ? "/preview" : "";
+  const suffix = previewType(item) ? "/preview" : "";
   const path = item.kind === "folder" ? "/inbox#" + item.share_token : "/f/" + item.share_token + suffix;
   return location.origin + path;
 }
@@ -547,10 +554,9 @@ async function remove(item) {
 
 function renderItem(item) {
   const folder = item.kind === "folder";
-  const extension = item.name.match(/\.([^.]+)$/)?.[1].toLowerCase();
-  const type = mediaType(item);
-  const openPreview = extension === "html" || extension === "htm" || extension === "pdf"
-    ? () => openDocument(item, extension)
+  const type = previewType(item);
+  const openPreview = isDocumentPreview(type)
+    ? () => openDocument(item, type)
     : type ? () => preview(item, type) : null;
   const li = document.createElement("li");
   li.dataset.entryId = item.id;
@@ -577,20 +583,36 @@ function renderItem(item) {
     tile.dataset.coverType = type;
     tile.dataset.coverSource = itemPath(item) + "/download";
   }
-  const icon = document.createElement("span");
-  icon.className = "icon " + (folder ? "icon-folder" : "icon-file");
-  tile.append(icon);
+  if (folder) {
+    const icon = document.createElement("span");
+    icon.className = "icon icon-folder";
+    tile.append(icon);
+  } else {
+    tile.append(fileIcon(item.name, type));
+  }
   const name = document.createElement("div");
   name.className = "entry-name";
   const open = button(item.name, folder ? () => openFolder(item) : openPreview ?? (() => download(item)));
   open.className = "entry-title";
-  name.append(open);
+  open.title = item.name;
+  const title = document.createElement("div");
+  title.className = "entry-title-wrap";
+  title.append(open);
+  name.append(title);
   const meta = document.createElement("div");
   meta.className = "entry-meta";
-  meta.append(sharingBadge(item));
+  const badges = document.createElement("div");
+  badges.className = "entry-badges";
+  badges.append(sharingBadge(item));
+  meta.append(badges);
+  const kind = document.createElement("span");
+  kind.className = "entry-kind";
+  kind.textContent = formatEntryKind(item);
+  meta.append(kind);
   if (!folder) {
     const size = document.createElement("small");
-    size.textContent = item.size >= MiB ? (item.size / MiB).toFixed(1) + " MiB" : Math.ceil(item.size / 1024) + " KiB";
+    size.className = "entry-size";
+    size.textContent = formatEntrySize(item.size);
     meta.append(size);
   }
   if (item.created_at) {
@@ -603,7 +625,7 @@ function renderItem(item) {
     const chip = document.createElement("small");
     chip.textContent = label;
     chip.className = "tag";
-    meta.append(chip);
+    badges.append(chip);
   }
   if (meta.childElementCount) name.append(meta);
   const actions = document.createElement("div");

@@ -1,5 +1,8 @@
-import { mediaType } from "./media-types.js";
+import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
+import { fileIcon } from "./file-icons.js";
+import { entryDateFormat, formatEntryKind, formatEntrySize } from "./entry-format.js";
+import { bindViewSwitch } from "./view-switch.js";
 
 const $ = (id) => document.getElementById(id);
 const token = location.hash.slice(1);
@@ -16,6 +19,11 @@ let listing = 0;
 let previewUrl;
 let previewRequest;
 let stopCovers;
+
+const viewSwitch = $("inbox-view-switch");
+bindViewSwitch(viewSwitch, "cloud-drive-inbox-view", "grid", (view) => {
+  $("inbox-entries").classList.toggle("inbox-list", view === "list");
+});
 
 function folderAddress(id) {
   const url = new URL("/inbox", location.origin);
@@ -90,14 +98,14 @@ async function preview(item, type) {
 function renderEntry(item) {
   const row = document.createElement("li");
   const isFolder = item.kind === "folder";
-  const pdf = /\.pdf$/i.test(item.name);
-  const documentPreview = !isFolder && (pdf || /\.html?$/i.test(item.name));
-  const type = mediaType(item);
+  const type = previewType(item);
+  const documentPreview = !isFolder && isDocumentPreview(type);
   const open = document.createElement(!isFolder && !documentPreview && type ? "button" : "a");
   open.className = "inbox-tile";
   open.title = item.name;
   const icon = document.createElement("span");
-  icon.className = "inbox-icon " + (isFolder ? "inbox-folder-icon" : "inbox-file-icon");
+  icon.className = "inbox-icon " + (isFolder ? "inbox-folder-icon" : "inbox-file-art");
+  if (!isFolder) icon.append(fileIcon(item.name, type));
   if (!isFolder && !documentPreview && (type?.startsWith("image/") || type?.startsWith("video/"))) {
     icon.dataset.coverType = type;
     icon.dataset.coverSource = fileAddress(item);
@@ -107,8 +115,31 @@ function renderEntry(item) {
   art.setAttribute("aria-hidden", "true");
   art.append(icon);
   const name = document.createElement("span");
+  name.className = "inbox-name";
   name.textContent = item.name;
-  open.append(art, name);
+  const info = document.createElement("span");
+  info.className = "inbox-info";
+  info.append(name);
+  const meta = document.createElement("span");
+  meta.className = "inbox-meta";
+  const kind = document.createElement("span");
+  kind.className = "inbox-kind";
+  kind.textContent = formatEntryKind(item);
+  meta.append(kind);
+  if (!isFolder && Number.isFinite(item.size)) {
+    const size = document.createElement("span");
+    size.className = "inbox-size";
+    size.textContent = formatEntrySize(item.size);
+    meta.append(size);
+  }
+  if (item.created_at) {
+    const time = document.createElement("time");
+    time.dateTime = item.created_at;
+    time.textContent = entryDateFormat.format(new Date(item.created_at));
+    meta.append(time);
+  }
+  info.append(meta);
+  open.append(art, info);
   row.append(open);
   if (isFolder) {
     open.href = folderAddress(item.id);
@@ -116,7 +147,7 @@ function renderEntry(item) {
     if (documentPreview) {
       const url = new URL("/html-preview", location.origin);
       url.searchParams.set("id", item.id);
-      if (pdf) url.searchParams.set("type", "pdf");
+      if (type === "application/pdf") url.searchParams.set("type", "pdf");
       url.hash = token;
       open.href = url.href;
       open.target = "_blank";
@@ -159,12 +190,14 @@ async function loadFolder() {
   $("inbox-next").disabled = !data.hasMore;
   $("inbox-page").textContent = "第 " + (page + 1) + " 页";
   form.hidden = false;
+  viewSwitch.hidden = false;
 }
 
 function folderError(error) {
   status.textContent = error.message;
   if (error.status === 404) {
     form.hidden = true;
+    viewSwitch.hidden = true;
     stopCovers?.();
     $("inbox-entries").replaceChildren();
     $("inbox-empty").hidden = $("inbox-pagination").hidden = true;

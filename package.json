@@ -5,9 +5,16 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "build:preview": "esbuild src/document-renderers.js --bundle --format=esm --platform=browser --minify --legal-comments=eof --outfile=public/document-renderers.js",
     "check": "node --check src/worker.js && node --check public/app.js"
   },
   "devDependencies": {
+    "docx-preview": "^0.4.1",
+    "dompurify": "^3.4.17",
+    "esbuild": "^0.28.2",
+    "jszip": "^3.10.2",
+    "marked": "^18.2.0",
+    "read-excel-file": "^9.3.15",
     "wrangler": "^4.45.0"
   }
 }

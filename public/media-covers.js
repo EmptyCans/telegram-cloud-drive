@@ -73,7 +73,6 @@ export function observeCovers(grid, headers) {
     const image = document.createElement("img");
     image.alt = "";
     image.src = url;
-    tile.classList.remove("inbox-file-icon");
     tile.classList.add("media-cover");
     tile.classList.toggle("video-cover", type.startsWith("video/"));
     tile.replaceChildren(image);
