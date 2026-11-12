@@ -1,6 +1,7 @@
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
+import { bindViewSwitch } from "./view-switch.js";
 
 const $ = (id) => document.getElementById(id);
 const token = location.hash.slice(1);
@@ -17,6 +18,11 @@ let listing = 0;
 let previewUrl;
 let previewRequest;
 let stopCovers;
+
+const viewSwitch = $("inbox-view-switch");
+bindViewSwitch(viewSwitch, "cloud-drive-inbox-view", "grid", (view) => {
+  $("inbox-entries").classList.toggle("inbox-list", view === "list");
+});
 
 function folderAddress(id) {
   const url = new URL("/inbox", location.origin);
@@ -160,12 +166,14 @@ async function loadFolder() {
   $("inbox-next").disabled = !data.hasMore;
   $("inbox-page").textContent = "第 " + (page + 1) + " 页";
   form.hidden = false;
+  viewSwitch.hidden = false;
 }
 
 function folderError(error) {
   status.textContent = error.message;
   if (error.status === 404) {
     form.hidden = true;
+    viewSwitch.hidden = true;
     stopCovers?.();
     $("inbox-entries").replaceChildren();
     $("inbox-empty").hidden = $("inbox-pagination").hidden = true;

@@ -15,7 +15,13 @@
     <section class="inbox-panel" aria-labelledby="inbox-title">
       <div class="toolbar">
         <h1 id="inbox-title">公开文件夹</h1>
-        <a id="inbox-up" hidden>返回上级</a>
+        <div class="row">
+          <a id="inbox-up" hidden>返回上级</a>
+          <div id="inbox-view-switch" class="view-switch" role="group" aria-label="文件视图" hidden>
+            <button type="button" data-view="list" aria-pressed="false">列表</button>
+            <button type="button" data-view="grid" aria-pressed="true">网格</button>
+          </div>
+        </div>
       </div>
       <form id="inbox-form" hidden>
         <div>

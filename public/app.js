@@ -1,6 +1,7 @@
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
+import { bindViewSwitch } from "./view-switch.js";
 
 const $ = (id) => document.getElementById(id);
 const MiB = 1024 * 1024;
@@ -25,25 +26,11 @@ let shareItem;
 let linksPage = 0;
 let linksListing = 0;
 const entryDragType = "application/x-cloud-drive-entry";
-const entryViewKey = "cloud-drive-entry-view";
-const viewButtons = $("entry-view-switch").querySelectorAll("button");
-
-function setEntryView(view) {
+bindViewSwitch($("entry-view-switch"), "cloud-drive-entry-view", "list", (view) => {
   const grid = view === "grid";
   $("entries").classList.toggle("entries-grid", grid);
   $("entries-heading").hidden = grid;
-  for (const button of viewButtons) {
-    button.setAttribute("aria-pressed", String(button.dataset.view === (grid ? "grid" : "list")));
-  }
-}
-
-setEntryView(localStorage.getItem(entryViewKey));
-for (const button of viewButtons) {
-  button.addEventListener("click", () => {
-    setEntryView(button.dataset.view);
-    localStorage.setItem(entryViewKey, button.dataset.view);
-  });
-}
+});
 
 function notice(message = "", error = false, item = null) {
   if ($("manager").hidden) {
