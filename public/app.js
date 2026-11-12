@@ -148,28 +148,14 @@ async function download(item) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-async function openHtml(item) {
+function openHtml(item) {
   const tab = window.open("about:blank", "_blank");
   if (!tab) throw new Error("浏览器拦截了新标签页，请允许弹出窗口后重试。");
   tab.opener = null;
-  const { document: page } = tab;
-  page.title = item.name;
-  page.body.textContent = "正在打开文件…";
-  try {
-    const blob = await api(itemPath(item) + "/download", {}, "blob");
-    if (tab.closed) return;
-    const frame = page.createElement("iframe");
-    frame.title = item.name;
-    frame.setAttribute("sandbox", "allow-scripts");
-    frame.referrerPolicy = "no-referrer";
-    frame.style.cssText = "display:block;width:100%;height:100vh;border:0";
-    frame.src = tab.URL.createObjectURL(blob.slice(0, blob.size, "text/html"));
-    page.body.style.margin = "0";
-    page.body.replaceChildren(frame);
-  } catch (error) {
-    if (!tab.closed) tab.close();
-    throw error;
-  }
+  tab.sessionStorage.setItem("cloud-drive-token", token);
+  const url = new URL("/html-preview", location.origin);
+  url.searchParams.set("id", item.id);
+  tab.location.replace(url);
 }
 
 async function preview(item) {

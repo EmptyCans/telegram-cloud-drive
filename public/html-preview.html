@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>文件预览</title>
+  <style>
+    body { margin: 0; font: 15px system-ui, sans-serif; }
+    p { margin: 16px; }
+    iframe:not([hidden]) { display: block; width: 100%; height: 100dvh; border: 0; }
+  </style>
+  <script type="module" src="/html-preview.js"></script>
+</head>
+<body>
+  <p id="status" role="status">正在打开文件…</p>
+  <iframe title="文件预览" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>
+</body>
+</html>
