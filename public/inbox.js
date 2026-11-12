@@ -91,30 +91,33 @@ async function preview(item, type) {
 
 function renderEntry(item) {
   const row = document.createElement("li");
-  const name = document.createElement(item.kind === "folder" ? "a" : "strong");
-  name.textContent = item.name;
-  row.append(name);
-  if (item.kind === "folder") {
-    name.href = folderAddress(item.id);
-    return row;
-  }
-  const actions = document.createElement("div");
-  actions.className = "row";
+  const isFolder = item.kind === "folder";
   const type = /\.html?$/i.test(item.name) ? "text/html" : mediaType(item);
-  if (type) {
-    const open = document.createElement("button");
+  const open = document.createElement(!isFolder && type ? "button" : "a");
+  open.className = "inbox-tile";
+  open.title = item.name;
+  const icon = document.createElement("span");
+  icon.className = "inbox-icon " + (isFolder ? "inbox-folder-icon" : "inbox-file-icon");
+  icon.setAttribute("aria-hidden", "true");
+  const name = document.createElement("span");
+  name.textContent = item.name;
+  open.append(icon, name);
+  row.append(open);
+  if (isFolder) {
+    open.href = folderAddress(item.id);
+  } else if (type) {
     open.type = "button";
-    open.textContent = "预览";
     open.addEventListener("click", () => preview(item, type));
-    actions.append(open);
+    const download = document.createElement("a");
+    download.className = "inbox-download";
+    download.href = fileAddress(item);
+    download.download = item.name;
+    download.textContent = "下载";
+    row.append(download);
+  } else {
+    open.href = fileAddress(item);
+    open.download = item.name;
   }
-  const download = document.createElement("a");
-  download.className = "inbox-download";
-  download.href = fileAddress(item);
-  download.download = item.name;
-  download.textContent = "下载";
-  actions.append(download);
-  row.append(actions);
   return row;
 }
 
@@ -125,7 +128,7 @@ async function loadFolder() {
   if (sequence !== listing) return;
   maxUploadMiB = data.maxUploadMiB;
   $("inbox-title").textContent = data.name;
-  $("inbox-limit").textContent = "选择文件上传，单个文件不超过 " + maxUploadMiB + " MiB";
+  $("inbox-limit").textContent = "单个文件不超过 " + maxUploadMiB + " MiB";
   const up = $("inbox-up");
   up.hidden = data.root;
   if (!data.root) up.href = folderAddress(data.parent);
@@ -147,10 +150,8 @@ function folderError(error) {
   }
 }
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const files = Array.from(input.files);
-  if (!files.length || submit.disabled) return;
+async function uploadFiles(files) {
+  if (!files.length || form.hidden || submit.disabled) return;
   input.disabled = submit.disabled = true;
   let completed = 0;
   const failures = [];
@@ -181,6 +182,31 @@ form.addEventListener("submit", async (event) => {
   } finally {
     input.disabled = submit.disabled = false;
   }
+}
+
+submit.addEventListener("click", () => input.click());
+input.addEventListener("change", () => uploadFiles(Array.from(input.files)));
+form.addEventListener("submit", (event) => event.preventDefault());
+
+function isFileDrag(event) {
+  return event.dataTransfer?.types.includes("Files");
+}
+
+window.addEventListener("dragover", (event) => {
+  if (!isFileDrag(event)) return;
+  event.preventDefault();
+  const ready = !form.hidden && !submit.disabled && !$("inbox-preview").open;
+  event.dataTransfer.dropEffect = ready ? "copy" : "none";
+  form.classList.toggle("inbox-dragging", ready);
+});
+window.addEventListener("dragleave", (event) => {
+  if (!event.relatedTarget) form.classList.remove("inbox-dragging");
+});
+window.addEventListener("drop", (event) => {
+  if (!isFileDrag(event)) return;
+  event.preventDefault();
+  form.classList.remove("inbox-dragging");
+  if (!$("inbox-preview").open) uploadFiles(Array.from(event.dataTransfer.files));
 });
 
 $("inbox-previous").addEventListener("click", () => {

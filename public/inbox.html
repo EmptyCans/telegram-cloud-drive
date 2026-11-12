@@ -18,12 +18,15 @@
         <a id="inbox-up" hidden>返回上级</a>
       </div>
       <form id="inbox-form" hidden>
-        <label for="inbox-files" id="inbox-limit"></label>
-        <input id="inbox-files" type="file" multiple required>
-        <button id="inbox-submit" class="primary">上传</button>
+        <div>
+          <strong>拖放文件到这里上传</strong>
+          <p id="inbox-limit"></p>
+        </div>
+        <input id="inbox-files" type="file" multiple hidden>
+        <button id="inbox-submit" class="primary" type="button">上传文件</button>
       </form>
       <p id="inbox-status" role="status">正在加载文件夹…</p>
-      <ul id="inbox-entries" class="links-list"></ul>
+      <ul id="inbox-entries" class="inbox-grid" aria-label="文件"></ul>
       <p id="inbox-empty" hidden>这个文件夹还没有文件。</p>
       <div id="inbox-pagination" class="row" hidden>
         <button id="inbox-previous">上一页</button><span id="inbox-page"></span><button id="inbox-next">下一页</button>
