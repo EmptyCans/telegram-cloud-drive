@@ -9,9 +9,9 @@
     "check": "node --check src/worker.js && node --check public/app.js"
   },
   "devDependencies": {
+    "docx-preview": "^0.4.1",
     "dompurify": "^3.4.17",
     "esbuild": "^0.28.2",
-    "mammoth": "^1.13.0",
     "marked": "^18.2.0",
     "wrangler": "^4.45.0"
   }
