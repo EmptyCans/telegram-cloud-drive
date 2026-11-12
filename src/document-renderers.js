@@ -19,7 +19,7 @@ export async function renderDocument(blob, type) {
 <meta name="referrer" content="no-referrer">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
 <style>
-  :root { color-scheme: light dark; font: 16px/1.65 system-ui, sans-serif; }
+  :root { color-scheme: light dark; color: CanvasText; background: Canvas; font: 16px/1.65 system-ui, sans-serif; }
   body { max-width: 850px; margin: auto; padding: clamp(16px, 5vw, 56px); overflow-wrap: anywhere; }
   h1, h2, h3, h4 { line-height: 1.25; }
   pre, blockquote { margin-inline: 0; padding: 12px 16px; background: color-mix(in srgb, CanvasText 8%, Canvas); border-radius: 6px; }

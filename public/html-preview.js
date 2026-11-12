@@ -51,6 +51,7 @@ async function loadPreview() {
     try {
       const { renderDocument } = await import("./document-renderers.js");
       frame.setAttribute("sandbox", "");
+      frame.classList.add("rendered-document");
       frame.srcdoc = await renderDocument(blob, type);
       frame.hidden = false;
       status.hidden = true;
