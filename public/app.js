@@ -12,6 +12,7 @@ let listing = 0;
 let uploading = false;
 let previewUrl;
 let draggedItem;
+let uploadTarget;
 const entryDragType = "application/x-cloud-drive-entry";
 
 function notice(message = "", error = false) {
@@ -209,7 +210,10 @@ function renderItem(item) {
     li.classList.remove("drag-source");
     document.querySelectorAll(".move-target").forEach((target) => target.classList.remove("move-target"));
   });
-  if (folder) moveTarget(li, item.id, item.name);
+  if (folder) {
+    li.dataset.uploadParent = item.id;
+    moveTarget(li, item.id, item.name);
+  }
   const tile = document.createElement("span");
   tile.className = "file-tile" + (folder ? " folder-tile" : "");
   tile.setAttribute("aria-hidden", "true");
@@ -318,11 +322,14 @@ async function refresh() {
   $("page").textContent = "第 " + (page + 1) + " 页";
 }
 
-async function upload(files) {
-  if (!token || !files.length || uploading) return;
+async function upload(files, parent = currentFolder()) {
+  if (!token || !files.length) return;
+  if (uploading) {
+    notice("正在上传其他文件，请等待当前批次完成。");
+    return;
+  }
   uploading = true;
   $("choose-files").disabled = true;
-  const parent = currentFolder();
   const failures = [];
   let completed = 0;
   try {
@@ -396,20 +403,32 @@ $("file-input").addEventListener("change", action(async (event) => {
   event.target.value = "";
   await upload(files);
 }));
-$("drop-zone").addEventListener("dragover", (event) => {
-  if (!event.dataTransfer.types.includes("Files")) return;
+function showUploadTarget(target) {
+  if (uploadTarget === target) return;
+  uploadTarget?.classList.remove("upload-target");
+  uploadTarget = target;
+  uploadTarget?.classList.add("upload-target");
+}
+
+function folderUnderPointer(event) {
+  return event.target.closest("[data-upload-parent]");
+}
+
+$("manager").addEventListener("dragover", (event) => {
+  if (draggedItem || !event.dataTransfer.types.includes("Files")) return;
   event.preventDefault();
-  event.dataTransfer.dropEffect = "copy";
-  $("drop-zone").classList.add("drag");
+  event.dataTransfer.dropEffect = uploading ? "none" : "copy";
+  showUploadTarget(uploading ? undefined : folderUnderPointer(event) ?? $("drop-zone"));
 });
-$("drop-zone").addEventListener("dragleave", (event) => {
-  if (!$("drop-zone").contains(event.relatedTarget)) $("drop-zone").classList.remove("drag");
+$("manager").addEventListener("dragleave", (event) => {
+  if (!$("manager").contains(event.relatedTarget)) showUploadTarget(undefined);
 });
-$("drop-zone").addEventListener("drop", action(async (event) => {
-  if (!event.dataTransfer.types.includes("Files")) return;
+$("manager").addEventListener("drop", action(async (event) => {
+  if (draggedItem || !event.dataTransfer.types.includes("Files")) return;
   event.preventDefault();
-  $("drop-zone").classList.remove("drag");
-  await upload(Array.from(event.dataTransfer.files));
+  showUploadTarget(undefined);
+  const parent = folderUnderPointer(event)?.dataset.uploadParent ?? currentFolder();
+  await upload(Array.from(event.dataTransfer.files), parent);
 }));
 $("settings").addEventListener("click", () => {
   const form = $("settings-form");

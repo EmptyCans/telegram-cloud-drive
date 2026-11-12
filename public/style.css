@@ -83,7 +83,7 @@ nav { flex: 1 1 160px; color: var(--muted); font-size: 13px; min-height: 31px; o
 .sort-control select { padding: 5px 8px; color: #18243b; }
 nav button { border: 0; padding: 4px 7px; color: var(--accent-strong); white-space: normal; max-width: 100%; }
 #drop-zone { min-height: 245px; border: 1px solid var(--border); border-radius: 13px; }
-#drop-zone.drag { outline: 2px dashed var(--accent); outline-offset: 3px; background: var(--accent-soft); }
+#manager .upload-target { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft); }
 .list-heading {
   display: flex; justify-content: space-between; padding: 10px 16px;
   background: #f6f8fc; border-bottom: 1px solid var(--border); border-radius: 12px 12px 0 0;
