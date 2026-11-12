@@ -70,7 +70,7 @@ h2 { font-size: 25px; font-weight: 750; line-height: 1.25; overflow-wrap: anywhe
 small, p { color: var(--muted); }
 
 .site-header { background: var(--surface); border-bottom: 1px solid var(--border); }
-.header-inner, main { width: min(100%, 1280px); margin-inline: auto; padding-inline: clamp(16px, 4vw, 48px); }
+.header-inner, main { width: min(100%, 1536px); margin-inline: auto; padding-inline: clamp(16px, 4vw, 48px); }
 .header-inner { min-height: 74px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 12px; }
 .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .brand p { font-size: 13px; margin-top: 3px; overflow-wrap: anywhere; }
@@ -108,7 +108,7 @@ input::placeholder { color: var(--placeholder); }
 .row, .toolbar, nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .toolbar { justify-content: space-between; gap: 16px; }
 
-#manager { display: grid; grid-template-columns: 168px minmax(0, 1fr); gap: 24px; align-items: start; }
+#manager { display: grid; grid-template-columns: 168px minmax(0, 1fr) minmax(225px, 270px); gap: 24px; align-items: start; }
 .sidebar {
   display: grid; gap: 5px; padding: 8px; background: var(--surface);
   border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow);
@@ -170,10 +170,16 @@ nav button { border: 0; padding: 4px 7px; color: var(--accent-strong); white-spa
 #empty { display: grid; justify-items: center; align-content: center; gap: 13px; min-height: 200px; padding: 20px; text-align: center; }
 .empty-mark { width: 54px; height: 54px; border-radius: 16px; }
 #pagination { justify-content: flex-end; margin-top: 16px; color: var(--muted); font-size: 13px; }
-#notice { margin: 14px 0 0; padding: 11px 14px; border: 1px solid var(--notice-border); border-radius: 10px; background: var(--accent-soft); color: var(--notice-text); white-space: pre-line; overflow-wrap: anywhere; }
+.notifications { min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
+.notifications h2 { margin-bottom: 12px; font-size: 16px; }
+#notices { display: grid; gap: 8px; max-height: 60dvh; overflow-y: auto; list-style: none; margin: 0; padding: 0; }
+#notices:not(:empty) + .no-notices { display: none; }
+.no-notices { font-size: 13px; }
+#notice, .notice { padding: 10px 12px; border: 1px solid var(--notice-border); border-radius: 10px; background: var(--accent-soft); color: var(--notice-text); white-space: pre-line; overflow-wrap: anywhere; }
+#notice { max-width: 430px; margin: 14px auto 0; }
+.notice { font-size: 13px; }
 #notice:empty { display: none; }
-#notice.error { color: var(--danger-text); background: var(--danger-background); border-color: var(--danger-border); }
-body:has(#manager[hidden]) #notice { max-width: 430px; margin-inline: auto; }
+#notice.error, .notice.error { color: var(--danger-text); background: var(--danger-background); border-color: var(--danger-border); }
 
 dialog { width: min(92vw, 490px); background: var(--surface); color: inherit; border: 1px solid var(--border); border-radius: 20px; padding: clamp(16px, 4vw, 27px); box-shadow: var(--shadow); }
 dialog::backdrop { background: var(--backdrop); }
@@ -195,8 +201,13 @@ dialog label { display: grid; gap: 6px; margin: 16px 0; font-weight: 600; }
 .icon-search::after { content: ""; position: absolute; width: 6px; height: 1.5px; background: currentColor; right: -5px; bottom: -2px; transform: rotate(45deg); border-radius: 2px; }
 .icon-settings { font-size: 18px; line-height: 17px; text-align: center; }
 
+@media (max-width: 1060px) {
+  #manager { grid-template-columns: 168px minmax(0, 1fr); }
+  .notifications { grid-column: 2; }
+}
 @media (max-width: 720px) {
   #manager { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .notifications { grid-column: 1; }
   .sidebar { display: flex; gap: 6px; }
   .header-inner { min-height: 62px; }
   .workspace-heading { margin-bottom: 14px; }

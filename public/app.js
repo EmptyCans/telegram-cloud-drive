@@ -15,9 +15,22 @@ let draggedItem;
 let uploadTarget;
 const entryDragType = "application/x-cloud-drive-entry";
 
-function notice(message = "", error = false) {
-  $("notice").textContent = message;
-  $("notice").classList.toggle("error", error);
+function notice(message = "", error = false, item = null) {
+  if ($("manager").hidden) {
+    $("notice").textContent = message;
+    $("notice").classList.toggle("error", error);
+    return null;
+  }
+  const list = $("notices");
+  const entry = item ?? document.createElement("li");
+  entry.className = error ? "notice error" : "notice";
+  entry.textContent = message;
+  if (!item) {
+    list.prepend(entry);
+    if (list.childElementCount > 30) list.lastElementChild.remove();
+    list.scrollTop = 0;
+  }
+  return entry;
 }
 
 async function api(path, options = {}, responseType = "json") {
@@ -72,6 +85,7 @@ function loggedOut() {
   query = tag = "";
   $("search").reset();
   $("entries").replaceChildren();
+  $("notices").replaceChildren();
   $("settings-dialog").close();
   $("preview-dialog").close();
   $("manager").hidden = $("logout").hidden = true;
@@ -83,6 +97,7 @@ async function loggedIn() {
   sessionStorage.setItem("cloud-drive-token", token);
   $("token").value = "";
   $("login").hidden = true;
+  $("notice").textContent = "";
   $("manager").hidden = $("logout").hidden = false;
   await refresh();
 }
@@ -350,9 +365,10 @@ async function upload(files, parent = currentFolder()) {
   $("choose-files").disabled = true;
   const failures = [];
   let completed = 0;
+  let progress;
   try {
     for (const [index, file] of files.entries()) {
-      notice("正在上传 " + (index + 1) + "/" + files.length + " · " + file.name);
+      progress = notice("正在上传 " + (index + 1) + "/" + files.length + " · " + file.name, false, progress);
       try {
         if (!file.size || file.size > config.maxUploadMiB * MiB) {
           throw new Error("文件必须大于 0 字节且不超过 " + config.maxUploadMiB + " MiB");
@@ -362,12 +378,13 @@ async function upload(files, parent = currentFolder()) {
         completed += 1;
       } catch (error) {
         failures.push(file.name + " · " + error.message);
-        if (!token) break;
+        if (!token) throw error;
       }
     }
     if (token) await refresh();
     notice(["已上传 " + completed + "/" + files.length + " 个文件", ...failures].join("\n"), failures.length > 0);
   } finally {
+    progress?.remove();
     uploading = false;
     $("choose-files").disabled = false;
   }
