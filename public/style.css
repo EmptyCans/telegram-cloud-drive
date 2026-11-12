@@ -151,7 +151,7 @@ input::placeholder { color: var(--placeholder); }
 #entries li + li { border-top: 1px solid var(--border); }
 #entries li:hover { background: var(--row-hover); }
 #entries li[data-upload-parent] { cursor: pointer; }
-#entries li[draggable] .entry-title, #entries li[draggable] .file-tile { cursor: grab; }
+#entries li[draggable="true"] .entry-title, #entries li[draggable="true"] .file-tile { cursor: grab; }
 #entries .drag-source { opacity: .55; }
 #manager .move-target { background: var(--accent-soft); outline: 2px solid var(--accent); outline-offset: -2px; }
 #entries li:last-child { border-radius: 0 0 12px 12px; }
@@ -159,6 +159,10 @@ input::placeholder { color: var(--placeholder); }
 .folder-tile { color: var(--folder-icon); background: var(--folder-background); }
 .entry-title { border: 0; background: transparent; padding: 0; text-align: left; white-space: normal; overflow-wrap: anywhere; max-width: 100%; }
 .entry-title:hover { color: var(--accent-strong); background: transparent; text-decoration: underline; }
+.rename-editor { display: inline-flex; align-items: center; max-width: min(100%, 420px); border: 1px solid var(--accent); border-radius: 6px; background: var(--surface); cursor: text; }
+.rename-editor:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rename-editor input { min-width: 4ch; field-sizing: content; border: 0; border-radius: 0; background: transparent; padding: 3px 0 3px 6px; outline: none; }
+.rename-suffix { padding-right: 6px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
 .entry-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 7px; margin-top: 3px; font-size: 13px; overflow-wrap: anywhere; }
 .entry-meta time { color: var(--muted); font-size: 12px; }
 .tag { padding: 2px 7px; border-radius: 20px; color: var(--accent-strong); background: var(--accent-soft); }

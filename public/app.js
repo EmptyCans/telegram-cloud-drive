@@ -238,6 +238,67 @@ async function update(item, data) {
   return result;
 }
 
+function renameInline(item, title) {
+  if (title.hidden) return;
+  const row = title.closest("li");
+  const dot = item.name.lastIndexOf(".");
+  const suffix = item.kind === "file" && dot > 0 && dot < item.name.length - 1 ? item.name.slice(dot) : "";
+  const editor = document.createElement("div");
+  editor.className = "rename-editor";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = suffix ? item.name.slice(0, -suffix.length) : item.name;
+  input.maxLength = 180 - suffix.length;
+  input.setAttribute("aria-label", "新名称");
+  editor.append(input);
+  if (suffix) {
+    const extension = document.createElement("span");
+    extension.className = "rename-suffix";
+    extension.textContent = suffix;
+    editor.append(extension);
+  }
+
+  function close(restoreFocus = false) {
+    input.removeEventListener("blur", save);
+    editor.remove();
+    title.hidden = false;
+    row.draggable = true;
+    if (restoreFocus) title.focus();
+  }
+
+  const save = action(async () => {
+    if (input.readOnly || !editor.isConnected) return;
+    const base = input.value.trim();
+    if (!base || base + suffix === item.name) {
+      close(document.activeElement === input);
+      return;
+    }
+    input.readOnly = true;
+    try {
+      await update(item, { name: base + suffix });
+      close();
+    } finally {
+      input.readOnly = false;
+    }
+  });
+  input.addEventListener("blur", save);
+  input.addEventListener("keydown", (event) => {
+    if (event.isComposing || input.readOnly) return;
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void save();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      close(true);
+    }
+  });
+  title.hidden = true;
+  title.after(editor);
+  row.draggable = false;
+  input.focus();
+  input.select();
+}
+
 async function download(item) {
   const blob = await api(itemPath(item) + "/download", {}, "blob");
   const url = URL.createObjectURL(blob);
@@ -376,10 +437,7 @@ function renderItem(item) {
     if (item.share_token) menu.append(button("撤销链接", () => update(item, { share: false })));
   }
   menu.append(
-    button("重命名", async () => {
-      const value = prompt("新名称", item.name);
-      if (value !== null && value.trim() !== item.name) await update(item, { name: value });
-    }),
+    button("重命名", () => renameInline(item, open)),
     button("标签", async () => {
       const value = prompt("用逗号分隔标签", item.tags.join(", "));
       if (value !== null) await update(item, { tags: value.split(/[,，]/).map((part) => part.trim()).filter(Boolean) });
@@ -398,7 +456,7 @@ function renderItem(item) {
   li.append(tile, name, actions);
   if (folder) {
     li.addEventListener("click", (event) => {
-      if (open.contains(event.target) || actions.contains(event.target)) return;
+      if (open.hidden || open.contains(event.target) || actions.contains(event.target)) return;
       open.click();
     });
   }
