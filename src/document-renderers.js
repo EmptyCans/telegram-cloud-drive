@@ -1,6 +1,7 @@
 import DOMPurify from "dompurify";
 import { marked } from "marked";
 import { renderAsync } from "docx-preview";
+export { renderWorkbook } from "./workbook-preview.js";
 
 function wordOutline(content, styles) {
   const levels = new Map();

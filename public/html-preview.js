@@ -1,4 +1,4 @@
-import { isDocumentPreview, isRenderedDocument, previewType } from "./media-types.js";
+import { isDocumentPreview, isRenderedDocument, isWorkbookPreview, previewType } from "./media-types.js";
 
 const status = document.getElementById("status");
 const frame = document.querySelector("iframe");
@@ -47,6 +47,16 @@ async function loadPreview() {
     return;
   }
   const blob = await response.blob();
+  if (isWorkbookPreview(type)) {
+    try {
+      const { renderWorkbook } = await import("./document-renderers.js");
+      document.body.append(await renderWorkbook(blob));
+      status.hidden = true;
+    } catch {
+      downloadFallback("无法预览此工作簿。", URL.createObjectURL(blob), name);
+    }
+    return;
+  }
   if (isRenderedDocument(type)) {
     try {
       const { renderDocument } = await import("./document-renderers.js");
