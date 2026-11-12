@@ -4,3 +4,8 @@ export const entryDateFormat = new Intl.DateTimeFormat("zh-CN", { dateStyle: "me
 export function formatEntrySize(bytes) {
   return bytes >= MiB ? (bytes / MiB).toFixed(1) + " MiB" : Math.ceil(bytes / 1024) + " KiB";
 }
+
+export function formatEntryKind(item) {
+  if (item.kind === "folder") return "文件夹";
+  return item.name.match(/\.([a-z\d]+)$/i)?.[1].toUpperCase() ?? "文件";
+}

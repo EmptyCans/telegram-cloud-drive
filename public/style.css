@@ -153,7 +153,7 @@ input::placeholder { color: var(--placeholder); }
 .view-switch button { padding: 4px 8px; border: 0; border-radius: 6px; font-size: 13px; }
 .view-switch button[aria-pressed="true"] { color: var(--accent-strong); background: var(--accent-soft); }
 #breadcrumbs button { border: 0; padding: 4px 7px; color: var(--accent-strong); white-space: normal; max-width: 100%; }
-#drop-zone { min-height: 245px; border: 1px solid var(--border); border-radius: 13px; }
+#drop-zone { min-height: 245px; border: 1px solid var(--border); border-radius: 13px; container-type: inline-size; }
 #manager .upload-target { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft); }
 .list-heading {
   display: flex; justify-content: space-between; padding: 10px 16px;
@@ -192,6 +192,28 @@ input::placeholder { color: var(--placeholder); }
 .rename-suffix { padding-right: 6px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
 .entry-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 7px; margin-top: 3px; font-size: 13px; overflow-wrap: anywhere; }
 .entry-meta time { color: var(--muted); font-size: 12px; }
+.entry-kind, .list-column { display: none; }
+.entry-title-wrap { min-width: 0; max-width: 100%; }
+.entry-badges { display: contents; }
+@container (min-width: 620px) {
+  #entries-heading, #entries:not(.entries-grid) > li {
+    display: grid; grid-template-columns: 48px minmax(0, 1fr) 142px 62px 70px 94px;
+    gap: 0 12px; padding-inline: 13px; align-items: center;
+  }
+  #entries-heading > :first-child { grid-column: span 2; }
+  #entries-heading .list-column { display: block; }
+  #entries-heading > :nth-child(4), #entries-heading > :last-child { text-align: right; }
+  #entries:not(.entries-grid) :is(.entry-name, .entry-meta) { display: contents; }
+  #entries:not(.entries-grid) .entry-title-wrap { grid-area: 1 / 2; align-self: end; }
+  #entries:not(.entries-grid) .entry-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+  #entries:not(.entries-grid) .entry-badges { grid-area: 2 / 2; display: flex; flex-wrap: wrap; gap: 4px 7px; align-self: start; min-width: 0; overflow-wrap: anywhere; }
+  #entries:not(.entries-grid) .file-tile { grid-area: 1 / 1 / span 2; }
+  #entries:not(.entries-grid) .entry-meta time { grid-area: 1 / 3 / span 2; }
+  #entries:not(.entries-grid) .entry-kind { display: block; grid-area: 1 / 4 / span 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #entries:not(.entries-grid) .entry-size { grid-area: 1 / 5 / span 2; text-align: right; }
+  #entries:not(.entries-grid) :is(.entry-kind, .entry-size) { color: var(--muted); font-size: 12px; }
+  #entries:not(.entries-grid) .actions { grid-area: 1 / 6 / span 2; justify-self: end; }
+}
 .tag { padding: 2px 7px; border-radius: 20px; color: var(--accent-strong); background: var(--accent-soft); }
 .sharing-badge { flex: none; padding: 1px 5px; border-radius: 6px; background: var(--list-heading); color: var(--muted); font-size: 11px; font-weight: 600; white-space: nowrap; }
 .sharing-badge.is-shared { color: var(--share-text); background: var(--share-background); }

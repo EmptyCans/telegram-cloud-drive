@@ -1,7 +1,7 @@
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
-import { entryDateFormat, formatEntrySize } from "./entry-format.js";
+import { entryDateFormat, formatEntryKind, formatEntrySize } from "./entry-format.js";
 import { bindViewSwitch } from "./view-switch.js";
 
 const $ = (id) => document.getElementById(id);
@@ -124,8 +124,7 @@ function renderEntry(item) {
   meta.className = "inbox-meta";
   const kind = document.createElement("span");
   kind.className = "inbox-kind";
-  const extension = item.name.match(/\.([a-z\d]+)$/i)?.[1];
-  kind.textContent = isFolder ? "文件夹" : extension?.toUpperCase() ?? "文件";
+  kind.textContent = formatEntryKind(item);
   meta.append(kind);
   if (!isFolder && Number.isFinite(item.size)) {
     const size = document.createElement("span");

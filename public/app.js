@@ -1,7 +1,7 @@
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
-import { entryDateFormat, formatEntrySize } from "./entry-format.js";
+import { entryDateFormat, formatEntryKind, formatEntrySize } from "./entry-format.js";
 import { bindViewSwitch } from "./view-switch.js";
 
 const $ = (id) => document.getElementById(id);
@@ -594,12 +594,24 @@ function renderItem(item) {
   name.className = "entry-name";
   const open = button(item.name, folder ? () => openFolder(item) : openPreview ?? (() => download(item)));
   open.className = "entry-title";
-  name.append(open);
+  open.title = item.name;
+  const title = document.createElement("div");
+  title.className = "entry-title-wrap";
+  title.append(open);
+  name.append(title);
   const meta = document.createElement("div");
   meta.className = "entry-meta";
-  meta.append(sharingBadge(item));
+  const badges = document.createElement("div");
+  badges.className = "entry-badges";
+  badges.append(sharingBadge(item));
+  meta.append(badges);
+  const kind = document.createElement("span");
+  kind.className = "entry-kind";
+  kind.textContent = formatEntryKind(item);
+  meta.append(kind);
   if (!folder) {
     const size = document.createElement("small");
+    size.className = "entry-size";
     size.textContent = formatEntrySize(item.size);
     meta.append(size);
   }
@@ -613,7 +625,7 @@ function renderItem(item) {
     const chip = document.createElement("small");
     chip.textContent = label;
     chip.className = "tag";
-    meta.append(chip);
+    badges.append(chip);
   }
   if (meta.childElementCount) name.append(meta);
   const actions = document.createElement("div");
