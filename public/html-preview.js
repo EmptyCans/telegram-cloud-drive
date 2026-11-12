@@ -50,7 +50,7 @@ async function loadPreview() {
   if (isRenderedDocument(type)) {
     try {
       const { renderDocument } = await import("./document-renderers.js");
-      frame.setAttribute("sandbox", "");
+      frame.setAttribute("sandbox", "allow-popups allow-popups-to-escape-sandbox");
       frame.classList.add("rendered-document");
       frame.srcdoc = await renderDocument(blob, type);
       frame.hidden = false;

@@ -9,8 +9,24 @@ export async function renderDocument(blob, type) {
   const content = DOMPurify.sanitize(html, {
     USE_PROFILES: { html: true },
     FORBID_TAGS: ["style", "form", "input", "button"],
-    FORBID_ATTR: ["style", "target"]
+    FORBID_ATTR: ["style", "target"],
+    RETURN_DOM_FRAGMENT: true
   });
+  let hasRelativeLinks = false;
+  for (const link of content.querySelectorAll("a[href]")) {
+    const href = link.getAttribute("href").trim();
+    if (/^https?:\/\//i.test(href)) {
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+    } else if (href && !href.startsWith("#") && !/^[a-z][a-z\d+.-]*:/i.test(href)) {
+      link.removeAttribute("href");
+      link.title = href;
+      link.classList.add("relative-link");
+      hasRelativeLinks = true;
+    }
+  }
+  const template = document.createElement("template");
+  template.content.append(content);
 
   return `<!doctype html>
 <html lang="zh-CN">
@@ -28,7 +44,12 @@ export async function renderDocument(blob, type) {
   table { display: block; overflow: auto; border-collapse: collapse; }
   td, th { border: 1px solid GrayText; padding: 6px 10px; }
   img { max-width: 100%; height: auto; }
+  .relative-link { text-decoration: underline dotted; }
+  .relative-link-note { padding: 8px 12px; border-left: 3px solid GrayText; font-size: 14px; }
 </style>
-<main>${content}</main>
+<main>
+${hasRelativeLinks ? '<p class="relative-link-note">部分链接指向原项目中的其他文件或目录，请从原项目打开。</p>' : ""}
+${template.innerHTML}
+</main>
 </html>`;
 }
