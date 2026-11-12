@@ -63,16 +63,23 @@ export async function renderWorkbook(blob) {
   toolbar.append(previousRows, nextRows, previousColumns, nextColumns, summary);
   view.append(toolbar, grid);
 
-  function appendPictures(pictures) {
+  let layoutObserver;
+
+  function appendPictures(pictures, table) {
     if (!detailsBySheet) {
       grid.append(element("p", "无法读取工作表图片。"));
       return;
     }
     if (!pictures.length) return;
-    const section = element("section");
-    section.className = "workbook-pictures";
-    section.append(element("h2", "工作表图片"));
-    pictures.forEach(({ source, alt, bounds, labels }, index) => {
+    const sheet = table.parentElement;
+    const layer = element("div");
+    layer.className = "workbook-picture-layer";
+    sheet.append(layer);
+    const fallback = element("section");
+    fallback.className = "workbook-pictures";
+    fallback.append(element("h2", "工作表图片"));
+    const anchored = [];
+    pictures.forEach(({ source, alt, bounds, from, to, labels }, index) => {
       const figure = element("figure");
       if (bounds) figure.style.width = bounds.width / 9525 + "px";
       const image = element("img");
@@ -89,17 +96,66 @@ export async function renderWorkbook(blob) {
         if (color) label.style.color = color;
         figure.append(label);
       }
-      section.append(figure);
+      if (from && (to || bounds)) {
+        layer.append(figure);
+        anchored.push({ figure, from, to, bounds });
+      } else {
+        fallback.append(figure);
+      }
     });
-    grid.append(section);
+    if (fallback.childElementCount > 1) grid.append(fallback);
+    if (!anchored.length) return;
+
+    const body = table.tBodies[0];
+    function positionPictures() {
+      const rect = body.getBoundingClientRect();
+      const sheetRect = sheet.getBoundingClientRect();
+      const firstCell = body.rows[0].cells[1].getBoundingClientRect();
+      const columns = Array.from(body.rows[0].cells).slice(1).map(cell => cell.getBoundingClientRect().left - firstCell.left);
+      const rows = Array.from(body.rows).map(row => row.getBoundingClientRect().top - rect.top);
+      const width = rect.right - firstCell.left;
+      layer.style.inset = `${rect.top - sheetRect.top}px auto auto ${firstCell.left - sheetRect.left}px`;
+      layer.style.width = width + "px";
+      layer.style.height = rect.height + "px";
+      function coordinate(index, starts, end, step) {
+        if (index < 0) return index * step;
+        return starts[index] ?? end + (index - starts.length) * step;
+      }
+      function point(marker) {
+        return {
+          x: coordinate(marker.column - columnOffset, columns, width, 90) + marker.x,
+          y: coordinate(marker.row - rowOffset, rows, rect.height, 24) + marker.y,
+        };
+      }
+      for (const { figure, from, to, bounds } of anchored) {
+        const start = point(from);
+        const end = bounds
+          ? { x: start.x + bounds.width / 9525, y: start.y + bounds.height / 9525 }
+          : point(to);
+        figure.style.left = start.x + "px";
+        figure.style.top = start.y + "px";
+        figure.style.width = Math.max(0, end.x - start.x) + "px";
+        figure.style.height = Math.max(0, end.y - start.y) + "px";
+      }
+    }
+    layoutObserver = new ResizeObserver(positionPictures);
+    layoutObserver.observe(table);
   }
 
   function render() {
     const { sheet, data } = sheets[Number(select.value)];
     const details = detailsBySheet?.get(sheet);
     const dataColumns = data.reduce((width, row) => Math.max(width, row.length), 0);
-    const columnCount = Math.max(minimumGridColumns, dataColumns, details?.columnCount ?? 0);
-    const rowCount = Math.max(minimumGridRows, data.length, details?.rowCount ?? 0);
+    const pictures = details?.pictures ?? [];
+    let columnCount = Math.max(minimumGridColumns, dataColumns, details?.columnCount ?? 0);
+    let rowCount = Math.max(minimumGridRows, data.length, details?.rowCount ?? 0);
+    for (const { from, to, bounds } of pictures) {
+      if (!from) continue;
+      const lastColumn = Math.max(to?.column ?? 0, from.column + Math.ceil((from.x + (bounds?.width ?? 0) / 9525) / 88));
+      const lastRow = Math.max(to?.row ?? 0, from.row + Math.ceil((from.y + (bounds?.height ?? 0) / 9525) / 24));
+      columnCount = Math.max(columnCount, Math.min(16384, lastColumn + 1));
+      rowCount = Math.max(rowCount, Math.min(1048576, lastRow + 1));
+    }
     const rowEnd = Math.min(rowCount, rowOffset + rowsPerPage);
     const columnEnd = Math.min(columnCount, columnOffset + columnsPerPage);
     previousRows.hidden = nextRows.hidden = rowCount <= rowsPerPage;
@@ -108,6 +164,7 @@ export async function renderWorkbook(blob) {
     nextRows.disabled = rowEnd === rowCount;
     previousColumns.disabled = columnOffset === 0;
     nextColumns.disabled = columnEnd === columnCount;
+    layoutObserver?.disconnect();
     grid.replaceChildren();
     grid.scrollTo(0, 0);
     summary.textContent = `第 ${rowOffset + 1}–${rowEnd} 行 · ${columnName(columnOffset)}–${columnName(columnEnd - 1)} 列`;
@@ -130,8 +187,11 @@ export async function renderWorkbook(blob) {
         row.insertCell().textContent = cellText(data[index]?.[column]);
       }
     }
-    grid.append(table);
-    appendPictures(details?.pictures ?? []);
+    const sheetView = element("div");
+    sheetView.className = "workbook-sheet";
+    sheetView.append(table);
+    grid.append(sheetView);
+    appendPictures(pictures, table);
   }
 
   select.addEventListener("change", () => {

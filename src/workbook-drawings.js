@@ -17,6 +17,20 @@ function relationshipId(node, name) {
   return relationshipNamespaces.map(namespace => node.getAttributeNS(namespace, name)).find(Boolean);
 }
 
+function cellAnchor(anchor, name) {
+  const marker = child(anchor, name);
+  if (!marker) return null;
+  const row = Number(child(marker, "row")?.textContent);
+  const column = Number(child(marker, "col")?.textContent);
+  if (!Number.isInteger(row) || row < 0 || row >= 1048576 ||
+      !Number.isInteger(column) || column < 0 || column >= 16384) return null;
+  return {
+    row, column,
+    x: (Number(child(marker, "colOff")?.textContent) || 0) / 9525,
+    y: (Number(child(marker, "rowOff")?.textContent) || 0) / 9525,
+  };
+}
+
 function drawingBounds(shape, anchor, rowPosition) {
   const transform = child(child(shape, "spPr"), "xfrm");
   const offset = child(transform, "off");
@@ -94,7 +108,11 @@ export async function loadWorkbookDetails(blob) {
       if (blip) {
         const source = await pictureSource(targets.get(relationshipId(blip, "embed")));
         const properties = child(child(picture, "nvPicPr"), "cNvPr");
-        if (source) pictures.push({ source, alt: properties?.getAttribute("descr"), bounds: drawingBounds(picture, anchor, rowPosition), labels: [] });
+        if (source) pictures.push({
+          source, alt: properties?.getAttribute("descr"),
+          bounds: drawingBounds(picture, anchor, rowPosition),
+          from: cellAnchor(anchor, "from"), to: cellAnchor(anchor, "to"), labels: [],
+        });
       }
       const shape = child(anchor, "sp");
       const body = child(shape, "txBody");
