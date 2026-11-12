@@ -5,6 +5,8 @@ const entryDateFormat = new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", 
 let token = sessionStorage.getItem("cloud-drive-token") ?? "";
 let config = { title: "云盘", description: "", maxUploadMiB: 20 };
 let folders = [];
+let folderIndex = new Map();
+const expandedFolders = new Set();
 let page = 0;
 let query = "";
 let tag = "";
@@ -81,14 +83,17 @@ function loggedOut() {
   token = "";
   sessionStorage.removeItem("cloud-drive-token");
   folders = [];
+  folderIndex.clear();
+  expandedFolders.clear();
   page = 0;
   query = tag = "";
   $("search").reset();
   $("entries").replaceChildren();
+  $("folder-tree").replaceChildren();
   $("notices").replaceChildren();
   $("settings-dialog").close();
   $("preview-dialog").close();
-  $("manager").hidden = $("logout").hidden = true;
+  $("manager").hidden = $("account-actions").hidden = true;
   $("login").hidden = false;
 }
 
@@ -98,7 +103,8 @@ async function loggedIn() {
   $("token").value = "";
   $("login").hidden = true;
   $("notice").textContent = "";
-  $("manager").hidden = $("logout").hidden = false;
+  $("manager").hidden = $("account-actions").hidden = false;
+  await loadFolderTree();
   await refresh();
 }
 
@@ -116,6 +122,83 @@ async function goRoot() {
 
 function currentFolder() {
   return folders.at(-1)?.id ?? "";
+}
+
+function folderPath(id) {
+  const path = [];
+  for (let folder = folderIndex.get(id); folder; folder = folderIndex.get(folder.parent_id)) {
+    path.push(folder);
+  }
+  return path.reverse();
+}
+
+async function openFolder(folder) {
+  const path = folderPath(folder.id);
+  folders = path.length ? path : [folder];
+  resetFilters();
+  await refresh();
+}
+
+function setBranchExpanded(toggle, branch, id, expanded) {
+  toggle.setAttribute("aria-expanded", String(expanded));
+  branch.hidden = !expanded;
+  if (expanded) expandedFolders.add(id);
+  else expandedFolders.delete(id);
+}
+
+async function loadFolderTree() {
+  const { folders: items } = await api("/api/folders");
+  if ($("manager").hidden) return;
+  folderIndex = new Map(items.map((folder) => [folder.id, folder]));
+  folders = folderPath(currentFolder());
+  const children = new Map();
+  for (const folder of items) {
+    if (!children.has(folder.parent_id)) children.set(folder.parent_id, []);
+    children.get(folder.parent_id).push(folder);
+  }
+  function renderBranch(parent) {
+    return (children.get(parent) ?? []).map((folder) => {
+      const item = document.createElement("li");
+      const row = document.createElement("div");
+      row.className = "tree-row";
+      row.dataset.uploadParent = folder.id;
+      const open = button(folder.name, () => openFolder(folder));
+      open.className = "tree-folder";
+      open.dataset.folderId = folder.id;
+      moveTarget(row, folder.id, folder.name);
+      item.append(row);
+      if (children.has(folder.id)) {
+        const branch = document.createElement("ul");
+        branch.className = "folder-tree";
+        branch.append(...renderBranch(folder.id));
+        const toggle = button("▸", () => setBranchExpanded(toggle, branch, folder.id, branch.hidden));
+        toggle.className = "tree-toggle";
+        toggle.setAttribute("aria-label", folder.name + "的子目录");
+        setBranchExpanded(toggle, branch, folder.id, expandedFolders.has(folder.id));
+        row.append(toggle);
+        item.append(branch);
+      }
+      row.append(open);
+      return item;
+    });
+  }
+  $("folder-tree").replaceChildren(...renderBranch(null));
+}
+
+function selectTreeFolder() {
+  const active = currentFolder();
+  if (active) $("go-root").removeAttribute("aria-current");
+  else $("go-root").setAttribute("aria-current", "location");
+  const openParents = new Set(folders.slice(0, -1).map(({ id }) => id));
+  for (const entry of $("folder-tree").querySelectorAll(".tree-folder")) {
+    if (entry.dataset.folderId === active) entry.setAttribute("aria-current", "location");
+    else entry.removeAttribute("aria-current");
+    const row = entry.parentElement;
+    const toggle = row.querySelector(".tree-toggle");
+    if (toggle && openParents.has(entry.dataset.folderId)) {
+      setBranchExpanded(toggle, row.nextElementSibling, entry.dataset.folderId, true);
+    }
+  }
 }
 
 function itemPath(item) {
@@ -142,6 +225,7 @@ function moveTarget(element, parent, label) {
     const item = draggedItem;
     if (event.dataTransfer.getData(entryDragType) !== item.id) return;
     await api(itemPath(item), { method: "PATCH", json: { parent } });
+    if (item.kind === "folder") await loadFolderTree();
     notice("已将「" + item.name + "」移到「" + label + "」");
     await refresh();
   }));
@@ -149,6 +233,7 @@ function moveTarget(element, parent, label) {
 
 async function update(item, data) {
   const result = await api(itemPath(item), { method: "PATCH", json: data });
+  if (item.kind === "folder" && data.name !== undefined) await loadFolderTree();
   await refresh();
   return result;
 }
@@ -216,6 +301,7 @@ async function remove(item) {
   if (originalConfirmed) message += "，已确认清除 " + originalConfirmed + " 条原始消息";
   if (originalUnconfirmed) message += "，" + originalUnconfirmed + " 条原始消息未确认删除，请到原位置检查";
   notice(message, originalUnconfirmed > 0);
+  if (item.kind === "folder") await loadFolderTree();
   await refresh();
 }
 
@@ -251,9 +337,7 @@ function renderItem(item) {
   const open = button(item.name, async () => {
     if (!folder && html) return openHtml(item);
     if (!folder) return image ? preview(item) : download(item);
-    folders = query || tag ? [item] : [...folders, item];
-    resetFilters();
-    await refresh();
+    await openFolder(item);
   });
   open.className = "entry-title";
   name.append(open);
@@ -328,6 +412,7 @@ async function refresh() {
   });
   const result = await api("/api/entries?" + params);
   if (sequence !== listing) return;
+  selectTreeFolder();
   if (!result.entries.length && page > 0) {
     page -= 1;
     return refresh();
@@ -428,6 +513,7 @@ $("new-folder").addEventListener("click", action(async () => {
   if (name === null) return;
   await api("/api/folders", { method: "POST", json: { name, parent: currentFolder() || null } });
   resetFilters();
+  await loadFolderTree();
   await refresh();
 }));
 $("previous").addEventListener("click", action(async () => { page -= 1; await refresh(); }));

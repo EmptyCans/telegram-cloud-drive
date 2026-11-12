@@ -16,7 +16,10 @@
         <span class="brand-mark" aria-hidden="true"><span class="icon icon-cloud"></span></span>
         <div><h1 id="title">云盘</h1><p id="description" hidden></p></div>
       </div>
-      <button id="logout" hidden>退出登录</button>
+      <div id="account-actions" class="row" hidden>
+        <button id="settings"><span class="icon icon-settings" aria-hidden="true">⚙</span> 设置</button>
+        <button id="logout">退出登录</button>
+      </div>
     </div>
   </header>
   <main>
@@ -28,10 +31,11 @@
       <button class="primary">登录</button>
     </form>
     <section id="manager" hidden aria-label="文件管理">
-      <aside class="sidebar" aria-label="云盘导航">
-        <button id="go-root" class="nav-current"><span class="icon icon-folder" aria-hidden="true"></span>文件</button>
-        <button id="settings"><span class="icon icon-settings" aria-hidden="true">⚙</span>设置</button>
-      </aside>
+      <nav class="sidebar" aria-label="文件结构">
+        <h2>文件结构</h2>
+        <button id="go-root" class="tree-folder" data-upload-parent="" aria-current="location"><span class="icon icon-folder" aria-hidden="true"></span>根目录</button>
+        <ul id="folder-tree" class="folder-tree"></ul>
+      </nav>
       <div class="workspace">
         <div class="toolbar workspace-heading">
           <h2>文件</h2>

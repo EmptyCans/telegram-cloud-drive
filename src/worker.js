@@ -376,6 +376,11 @@ async function handle(request, env) {
   }
   const db = await database(env);
   if (pathname === "/api/entries" && method === "GET") return list(db, url);
+  if (pathname === "/api/folders" && method === "GET") {
+    const { results } = await db.prepare(`SELECT id, parent_id, name FROM entries
+      WHERE kind = 'folder' AND deleted_at IS NULL ORDER BY name COLLATE NOCASE, id`).all();
+    return json({ folders: results });
+  }
   if (pathname === "/api/folders" && method === "POST") {
     const body = await bodyJson(request);
     const parent = body?.parent ?? null;
