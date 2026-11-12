@@ -1,4 +1,4 @@
-import { previewType } from "./media-types.js";
+import { isDocumentPreview, isRenderedDocument, previewType } from "./media-types.js";
 
 const status = document.getElementById("status");
 const frame = document.querySelector("iframe");
@@ -37,14 +37,28 @@ async function loadPreview() {
   const filename = response.headers.get("Content-Disposition")?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
   const name = filename ? decodeURIComponent(filename) : "文件";
   document.title = name;
-  const type = fileShare ? previewType({ name })
-    : params.get("type") === "pdf" ? "application/pdf" : "text/html";
+  const detected = previewType({ name });
+  const type = fileShare ? detected
+    : isDocumentPreview(detected) ? detected
+      : params.get("type") === "pdf" ? "application/pdf" : "text/html";
   if (!type) {
     await response.body?.cancel();
     downloadFallback("此格式可以下载后打开。", path, name).click();
     return;
   }
   const blob = await response.blob();
+  if (isRenderedDocument(type)) {
+    try {
+      const { renderDocument } = await import("./document-renderers.js");
+      frame.setAttribute("sandbox", "");
+      frame.srcdoc = await renderDocument(blob, type);
+      frame.hidden = false;
+      status.hidden = true;
+    } catch {
+      downloadFallback("无法预览此文档。", URL.createObjectURL(blob), name);
+    }
+    return;
+  }
   const pdf = type === "application/pdf";
   if (pdf && await blob.slice(0, 5).text() !== "%PDF-") throw new Error("文件内容不是有效的 PDF，请下载后检查。");
   const previewUrl = URL.createObjectURL(blob.slice(0, blob.size, type));

@@ -2,6 +2,10 @@
   "name": "telegram-cloud-drive",
   "main": "src/worker.js",
   "compatibility_date": "2026-04-21",
+  "build": {
+    "command": "npm run build:preview",
+    "watch_dir": "src"
+  },
   "assets": {
     "directory": "./public",
     "run_worker_first": [
