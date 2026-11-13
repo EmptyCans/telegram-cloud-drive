@@ -123,6 +123,17 @@ input::placeholder { color: var(--placeholder); }
   border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow);
 }
 .sidebar h2 { padding: 4px 6px 8px; font-size: 14px; }
+#manager > .sidebar { display: flex; flex-direction: column; overflow: hidden; }
+#manager .directory-scroll { min-height: 0; overflow: auto; }
+#account-actions { justify-content: center; flex: none; gap: 6px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+#account-actions button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; color: var(--muted); }
+#account-actions button:hover { color: var(--text); }
+.icon-link::before, .icon-link::after { content: ""; position: absolute; width: 10px; height: 6px; border: 1.5px solid currentColor; border-radius: 4px; transform: rotate(-45deg); }
+.icon-link::before { top: 3px; right: 1px; }
+.icon-link::after { bottom: 3px; left: 1px; }
+.icon-logout { background: linear-gradient(currentColor, currentColor) right 2px center / 9px 1.5px no-repeat; }
+.icon-logout::before { content: ""; position: absolute; inset: 2px 8px 2px 1px; border: 1.5px solid currentColor; border-right: 0; border-radius: 2px 0 0 2px; }
+.icon-logout::after { content: ""; position: absolute; right: 2px; top: 6px; width: 5px; height: 5px; border: solid currentColor; border-width: 1.5px 1.5px 0 0; transform: rotate(45deg); }
 .folder-tree { list-style: none; margin: 0; padding: 0; }
 .sidebar .folder-tree { padding-left: 12px; }
 .tree-row { display: flex; align-items: stretch; min-height: 26px; border-radius: 5px; }

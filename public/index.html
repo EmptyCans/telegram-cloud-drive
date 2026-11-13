@@ -17,11 +17,6 @@
         <span class="brand-mark" aria-hidden="true"><span class="icon icon-cloud"></span></span>
         <div><h1 id="title">云盘</h1><p id="description" hidden></p></div>
       </div>
-      <div id="account-actions" class="row" hidden>
-        <button id="manage-links">链接管理</button>
-        <button id="settings"><span class="icon icon-settings" aria-hidden="true">⚙</span> 设置</button>
-        <button id="logout">退出登录</button>
-      </div>
     </div>
   </header>
   <main>
@@ -35,13 +30,17 @@
     </form>
     <section id="manager" hidden aria-label="文件管理">
       <nav class="sidebar" aria-label="文件结构">
-        <h2>文件结构</h2>
         <div class="directory-scroll" tabindex="0" aria-label="目录树">
         <div class="tree-row" data-upload-parent="">
           <button id="root-toggle" class="tree-toggle" type="button" aria-label="根目录的子目录" aria-controls="folder-tree" aria-expanded="true"></button>
           <button id="go-root" class="tree-folder" aria-current="location"><span class="icon icon-folder" aria-hidden="true"></span>根目录</button>
         </div>
         <ul id="folder-tree" class="folder-tree"></ul>
+        </div>
+        <div id="account-actions" class="row" role="group" aria-label="网盘管理" hidden>
+          <button id="manage-links" type="button" aria-label="链接管理" title="链接管理"><span class="icon icon-link" aria-hidden="true"></span></button>
+          <button id="settings" type="button" aria-label="设置" title="设置"><span class="icon icon-settings" aria-hidden="true">⚙</span></button>
+          <button id="logout" type="button" aria-label="退出登录" title="退出登录"><span class="icon icon-logout" aria-hidden="true"></span></button>
         </div>
       </nav>
       <div id="file-view" class="workspace">
