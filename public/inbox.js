@@ -58,13 +58,21 @@ function fileAddress(item) {
   return endpoint + "/" + encodeURIComponent(item.id) + "/download";
 }
 
-const preview = createMediaPreview($("inbox-preview"), async (item, _type, signal) =>
-  (await request(fileAddress(item), { signal })).blob(), (item) => {
+async function downloadFile(item) {
+  const blob = await (await request(fileAddress(item))).blob();
+  const url = URL.createObjectURL(blob);
+  try {
     const link = document.createElement("a");
-    link.href = fileAddress(item);
+    link.href = url;
     link.download = item.name;
     link.click();
-  });
+  } finally {
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+}
+
+const preview = createMediaPreview($("inbox-preview"), async (item, _type, signal) =>
+  (await request(fileAddress(item), { signal })).blob(), downloadFile);
 
 function renderEntry(item, entries) {
   const row = document.createElement("li");
@@ -110,6 +118,26 @@ function renderEntry(item, entries) {
     meta.append(time);
   }
   info.append(meta);
+  const feedback = document.createElement("span");
+  feedback.className = "inbox-file-feedback";
+  feedback.setAttribute("role", "status");
+  function bindDownload(link) {
+    link.addEventListener("click", async event => {
+      if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+      if (row.getAttribute("aria-busy") === "true") return;
+      row.setAttribute("aria-busy", "true");
+      feedback.textContent = "正在准备下载…";
+      try {
+        await downloadFile(item);
+        feedback.textContent = "已交给浏览器下载";
+      } catch (error) {
+        feedback.textContent = error.message;
+      } finally {
+        row.removeAttribute("aria-busy");
+      }
+    });
+  }
   open.append(art, info);
   row.append(open);
   if (isFolder) {
@@ -131,11 +159,14 @@ function renderEntry(item, entries) {
     download.href = fileAddress(item);
     download.download = item.name;
     download.textContent = "下载";
+    bindDownload(download);
     row.append(download);
   } else {
     open.href = fileAddress(item);
     open.download = item.name;
+    bindDownload(open);
   }
+  if (!isFolder) row.append(feedback);
   return row;
 }
 
