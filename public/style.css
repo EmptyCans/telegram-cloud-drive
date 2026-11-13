@@ -439,6 +439,15 @@ dialog.media-preview { width: calc(100% - 24px); max-width: 1440px; height: calc
 
 .inbox-layout { display: grid; gap: 12px; }
 .inbox-layout .inbox-panel { width: 100%; min-width: 0; max-width: none; margin: 0; }
+.inbox-panel { position: relative; isolation: isolate; }
+.inbox-folder-loading {
+  position: absolute; inset: 0; z-index: 4; display: grid; place-items: center; border-radius: inherit;
+  background: color-mix(in srgb, var(--surface) 45%, transparent); backdrop-filter: blur(3px);
+}
+.inbox-folder-loading span {
+  padding: 8px 14px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text); font-size: 13px;
+}
 .inbox-no-notices { font-size: 13px; }
 #inbox-status:not(:empty) + .inbox-no-notices,
 .inbox-notifications:has(#inbox-progress:not([hidden])) .inbox-no-notices { display: none; }

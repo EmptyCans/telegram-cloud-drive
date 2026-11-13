@@ -301,6 +301,8 @@ async function loadFolder(target = folder, offsetPage = page, historyMode) {
 
 async function navigateFolder(target, historyMode) {
   navigating = true;
+  const loading = $("inbox-folder-loading");
+  loading.hidden = false;
   const expected = listing + 1;
   try {
     await loadFolder(target, 0, historyMode);
@@ -308,7 +310,10 @@ async function navigateFolder(target, historyMode) {
     if (historyMode === "pop") history.replaceState(null, "", folderAddress(folder));
     status.textContent = error.message;
   } finally {
-    if (expected === listing) navigating = false;
+    if (expected === listing) {
+      navigating = false;
+      loading.hidden = true;
+    }
   }
 }
 
