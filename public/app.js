@@ -19,6 +19,7 @@ let batchBusy = false;
 let page = 0;
 let query = "";
 let tag = "";
+let fileType = "";
 let listing = 0;
 let uploading = false;
 
@@ -105,7 +106,7 @@ function loggedOut() {
   expandedFolders.clear();
   setBranchExpanded($("root-toggle"), $("folder-tree"), "", true);
   page = 0;
-  query = tag = "";
+  query = tag = fileType = "";
   $("search").reset();
   stopCovers?.();
   stopCovers = undefined;
@@ -134,7 +135,7 @@ async function loggedIn() {
 }
 
 function resetFilters() {
-  query = tag = "";
+  query = tag = fileType = "";
   page = 0;
   $("search").reset();
 }
@@ -722,7 +723,7 @@ function renderItem(item, entries) {
 async function refresh(focus = null) {
   const sequence = ++listing;
   const params = new URLSearchParams({
-    parent: currentFolder(), q: query, tag, sort: $("sort").value, offset: page * pageSize
+    parent: currentFolder(), q: query, tag, type: fileType, sort: $("sort").value, offset: page * pageSize
   });
   if (focus) params.set("focus", focus);
   const result = await api("/api/entries?" + params);
@@ -760,7 +761,7 @@ async function refresh(focus = null) {
     row?.querySelector(".entry-title").focus({ preventScroll: true });
   }
   $("empty").hidden = result.entries.length > 0;
-  $("empty-message").textContent = query || tag ? "没有符合条件的项目。" : "拖放或粘贴文件，或点击「上传文件」。";
+  $("empty-message").textContent = query || tag || fileType ? "没有符合条件的项目。" : "拖放或粘贴文件，或点击「上传文件」。";
   $("pagination").hidden = !page && !result.hasMore;
   $("previous").disabled = page === 0;
   $("next").disabled = !result.hasMore;
@@ -919,9 +920,11 @@ $("search").addEventListener("submit", action(async (event) => {
   const form = new FormData(event.target);
   query = form.get("q").trim();
   tag = form.get("tag").trim();
+  fileType = form.get("type");
   page = 0;
   await refresh();
 }));
+$("file-type").addEventListener("change", () => $("search").requestSubmit());
 $("sort").addEventListener("change", action(async () => {
   page = 0;
   await refresh();

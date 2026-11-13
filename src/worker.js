@@ -1,4 +1,5 @@
 import { previewType } from "../public/media-types.js";
+import { extensionGroups } from "../public/file-icons.js";
 
 const MiB = 1024 * 1024;
 const downloadLimit = 20 * MiB;
@@ -205,6 +206,16 @@ async function list(db, url) {
   if (tag) {
     conditions.push("EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?)");
     parameters.push(tag);
+  }
+  const type = url.searchParams.get("type");
+  if (type === "folder") {
+    conditions.push("kind = 'folder'");
+  } else {
+    const extensions = type === "pdf" ? ["pdf"] : extensionGroups.get(type);
+    if (extensions) {
+      conditions.push(`kind = 'file' AND (${extensions.map(() => "substr(lower(name), -length(?)) = ?").join(" OR ")})`);
+      parameters.push(...extensions.flatMap(extension => ["." + extension, "." + extension]));
+    }
   }
   const where = conditions.join(" AND ");
   const sortOrder = `kind DESC, ${order}, id`;

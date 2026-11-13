@@ -62,6 +62,20 @@
         <form id="search" class="row">
           <label class="search-field"><span class="icon icon-search" aria-hidden="true"></span><input name="q" type="search" placeholder="搜索文件或目录" aria-label="搜索名称"></label>
           <input name="tag" type="search" placeholder="筛选标签" aria-label="筛选标签">
+          <select id="file-type" name="type" aria-label="文件类型">
+            <option value="">全部类型</option>
+            <option value="folder">文件夹</option>
+            <option value="image">图片</option>
+            <option value="video">视频</option>
+            <option value="audio">音频</option>
+            <option value="pdf">PDF</option>
+            <option value="document">文档</option>
+            <option value="sheet">表格</option>
+            <option value="slides">演示文稿</option>
+            <option value="archive">压缩包</option>
+            <option value="code">代码和网页</option>
+            <option value="app">安装包</option>
+          </select>
           <button>搜索</button>
         </form>
         <div class="list-toolbar toolbar">

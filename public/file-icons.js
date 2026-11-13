@@ -1,13 +1,13 @@
-const extensionGroups = new Map([
+export const extensionGroups = new Map([
   ["document", ["doc", "docx", "odt", "rtf", "txt", "md"]],
   ["sheet", ["xls", "xlsx", "ods", "csv", "tsv"]],
   ["slides", ["ppt", "pptx", "odp", "key"]],
   ["archive", ["zip", "rar", "7z", "tar", "gz", "bz2", "xz"]],
   ["code", ["html", "htm", "css", "js", "ts", "json", "xml", "yaml", "yml", "py", "go", "sh", "sql"]],
   ["app", ["exe", "msi", "apk", "dmg", "pkg"]],
-  ["image", ["svg", "bmp", "tiff", "heic", "ico", "psd"]],
-  ["video", ["avi", "mkv", "wmv", "flv", "mpeg", "mpg"]],
-  ["audio", ["wma", "aiff", "mid", "midi"]]
+  ["image", ["jpg", "jpeg", "png", "gif", "webp", "avif", "svg", "bmp", "tif", "tiff", "heic", "ico", "psd"]],
+  ["video", ["mp4", "m4v", "mov", "webm", "ogv", "avi", "mkv", "wmv", "flv", "mpeg", "mpg"]],
+  ["audio", ["mp3", "wav", "m4a", "aac", "ogg", "opus", "flac", "weba", "wma", "aiff", "mid", "midi"]]
 ]);
 
 export function fileIcon(name, type) {
