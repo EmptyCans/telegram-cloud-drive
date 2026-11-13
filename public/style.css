@@ -179,6 +179,18 @@ input::placeholder { color: var(--placeholder); }
   min-width: 0; padding: 8px 10px 12px; border: 1px solid var(--border); border-radius: 10px;
 }
 .entry-extension { display: none; }
+.batch-check { display: none; }
+#batch-toolbar { margin-bottom: 8px; color: var(--muted); font-size: 13px; }
+#batch-toolbar label { display: inline-flex; align-items: center; gap: 4px; }
+#batch-toolbar button { padding: 5px 8px; }
+#entries.batch-mode > li { position: relative; padding-left: 35px; }
+#entries.batch-mode .batch-check { position: absolute; display: block; left: 10px; top: 50%; transform: translateY(-50%); margin: 0; accent-color: var(--accent); }
+#entries.batch-mode > li:has(.batch-check:checked) { background: var(--accent-soft); }
+#entries.entries-grid.batch-mode > li { padding-left: 10px; }
+#entries.entries-grid.batch-mode .batch-check { top: 16px; transform: none; }
+#entries.entries-grid.batch-mode .actions { padding-left: 19px; }
+#entries.entries-grid.batch-mode .entry-extension { display: none; }
+#drop-zone:has(.batch-mode) #entries-heading { padding-left: 35px; }
 #entries.entries-grid .actions { order: -1; align-self: stretch; justify-content: flex-end; gap: 4px; }
 #entries.entries-grid .entry-extension {
   display: block; min-width: 0; margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

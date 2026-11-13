@@ -14,6 +14,8 @@ let config = { title: "云盘", description: "", maxUploadMiB: 20 };
 let folders = [];
 let folderIndex = new Map();
 const expandedFolders = new Set();
+let visibleEntries = [];
+let batchBusy = false;
 let page = 0;
 let query = "";
 let tag = "";
@@ -493,7 +495,7 @@ async function showLinksView() {
   }
 }
 
-async function remove(item) {
+async function remove(item, refreshAfter = true) {
   const path = itemPath(item);
   const options = { method: "DELETE" };
   let result;
@@ -502,7 +504,7 @@ async function remove(item) {
   } catch (error) {
     if (error.code !== "LEGACY_DESTINATION") throw error;
     const same = confirm("部分旧文件未记录原始存储位置。只有这些文件确实存放在当前配置的位置时，才点击确定同步删除。");
-    if (!same && !confirm("从云盘移除这些旧文件，保留它们的原始消息？")) return;
+    if (!same && !confirm("从云盘移除这些旧文件，保留它们的原始消息？")) return false;
     result = await api(path + "?legacy=" + (same ? "current" : "skip"), options);
   }
   const { removed, originalConfirmed, originalUnconfirmed } = result;
@@ -510,8 +512,60 @@ async function remove(item) {
   if (originalConfirmed) message += "，已确认清除 " + originalConfirmed + " 条原始消息";
   if (originalUnconfirmed) message += "，" + originalUnconfirmed + " 条原始消息未确认删除，请到原位置检查";
   notice(message, originalUnconfirmed > 0);
-  if (item.kind === "folder") await loadFolderTree();
-  await refresh();
+  if (refreshAfter) {
+    if (item.kind === "folder") await loadFolderTree();
+    await refresh();
+  }
+  return true;
+}
+
+function batchChecks() {
+  return [...$("entries").querySelectorAll(".batch-check")];
+}
+
+function updateBatchControls() {
+  const checks = batchChecks();
+  const count = checks.filter(check => check.checked).length;
+  $("batch-count").textContent = "已选 " + count + " 项";
+  $("batch-all").checked = count > 0 && count === checks.length;
+  $("batch-all").indeterminate = count > 0 && count < checks.length;
+  $("batch-all").disabled = batchBusy || !checks.length;
+  $("batch-toggle").disabled = batchBusy;
+  $("batch-delete").disabled = $("batch-move").disabled = batchBusy || !count;
+  for (const check of checks) check.disabled = batchBusy;
+}
+
+function batchItems() {
+  const ids = new Set(batchChecks().filter(check => check.checked).map(check => check.value));
+  return visibleEntries.filter(item => ids.has(item.id) &&
+    !folderPath(item.parent_id).some(folder => ids.has(folder.id)));
+}
+
+async function runBatch(items, label, operation) {
+  if (batchBusy || !items.length) return;
+  const session = token;
+  batchBusy = true;
+  updateBatchControls();
+  let completed = 0;
+  const failures = [];
+  try {
+    for (const item of items) {
+      if (!token || token !== session) break;
+      try {
+        if (await operation(item) !== false) completed += 1;
+        else failures.push(item.name + " · 已跳过");
+      } catch (error) {
+        failures.push(item.name + " · " + error.message);
+      }
+    }
+    if (!token || token !== session) return;
+    notice(["已" + label + " " + completed + "/" + items.length + " 项", ...failures].join("\n"), failures.length > 0);
+    if (completed && items.some(item => item.kind === "folder")) await loadFolderTree();
+    await refresh();
+  } finally {
+    batchBusy = false;
+    updateBatchControls();
+  }
 }
 
 function renderItem(item, entries) {
@@ -521,9 +575,26 @@ function renderItem(item, entries) {
     ? () => openDocument(item, type)
     : type ? () => preview(item, entries) : null;
   const li = document.createElement("li");
+  const check = document.createElement("input");
+  check.type = "checkbox";
+  check.className = "batch-check";
+  check.value = item.id;
+  check.setAttribute("aria-label", "选择 " + item.name);
+  check.addEventListener("change", updateBatchControls);
+  li.append(check);
+  li.addEventListener("click", event => {
+    if ($("batch-toolbar").hidden || event.target === check || event.target.closest(".actions, .rename-editor")) return;
+    event.stopImmediatePropagation();
+    event.preventDefault();
+    if (!batchBusy) check.click();
+  }, { capture: true });
   li.dataset.entryId = item.id;
   li.draggable = true;
   li.addEventListener("dragstart", (event) => {
+    if (!$("batch-toolbar").hidden) {
+      event.preventDefault();
+      return;
+    }
     draggedItem = item;
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData(entryDragType, item.id);
@@ -640,7 +711,7 @@ function renderItem(item, entries) {
   if (folder || openPreview) {
     li.classList.add("entry-openable");
     li.addEventListener("click", (event) => {
-      if (open.hidden || open.contains(event.target) || actions.contains(event.target)) return;
+      if (event.target === check || open.hidden || open.contains(event.target) || actions.contains(event.target)) return;
       open.click();
     });
   }
@@ -677,7 +748,9 @@ async function refresh(focus = null) {
   if (query || tag) crumbs.append(" / 全局搜索");
   const entries = $("entries");
   stopCovers?.();
-  entries.replaceChildren(...result.entries.map(item => renderItem(item, result.entries)));
+  visibleEntries = result.entries;
+  entries.replaceChildren(...visibleEntries.map(item => renderItem(item, visibleEntries)));
+  updateBatchControls();
   stopCovers = observeCovers(entries, { Authorization: "Bearer " + token });
   if (focus) {
     const row = Array.from(entries.children).find((entry) => entry.dataset.entryId === focus);
@@ -751,6 +824,40 @@ async function uploadItems(items, parent = currentFolder()) {
     $("choose-files").disabled = $("choose-directory").disabled = false;
   }
 }
+
+$("batch-toggle").addEventListener("click", () => {
+  const enabled = $("batch-toolbar").hidden;
+  $("batch-toolbar").hidden = !enabled;
+  $("entries").classList.toggle("batch-mode", enabled);
+  $("batch-toggle").setAttribute("aria-pressed", String(enabled));
+  $("batch-toggle").textContent = enabled ? "退出批量" : "批量操作";
+  for (const check of batchChecks()) check.checked = false;
+  updateBatchControls();
+});
+$("batch-all").addEventListener("change", event => {
+  for (const check of batchChecks()) check.checked = event.target.checked;
+  updateBatchControls();
+});
+$("batch-delete").addEventListener("click", action(async () => {
+  const items = batchItems();
+  if (!items.length || !confirm("删除选中的 " + items.length + " 项及其子项目，并尝试同步删除原始消息？")) return;
+  await runBatch(items, "删除", item => remove(item, false));
+}));
+$("batch-move").addEventListener("click", () => {
+  const blocked = new Set(batchItems().filter(item => item.kind === "folder").map(item => item.id));
+  const targets = [...folderIndex.values()].filter(folder => !folderPath(folder.id).some(item => blocked.has(item.id)));
+  $("batch-destination").replaceChildren(new Option("根目录", ""), ...targets.map(folder =>
+    new Option("/" + folderPath(folder.id).map(item => item.name).join("/"), folder.id)));
+  $("batch-move-dialog").showModal();
+});
+$("batch-move-form").addEventListener("submit", action(async event => {
+  event.preventDefault();
+  const parent = $("batch-destination").value || null;
+  $("batch-move-dialog").close();
+  const items = batchItems().filter(item => (item.parent_id ?? null) !== parent);
+  if (!items.length) return notice("所选项目已在目标目录。");
+  await runBatch(items, "移动", item => api(itemPath(item), { method: "PATCH", json: { parent } }));
+}));
 
 document.addEventListener("paste", action(async (event) => {
   if ($("manager").hidden || $("file-view").hidden || document.querySelector("dialog[open]")) return;

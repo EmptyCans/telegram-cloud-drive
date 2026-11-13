@@ -48,6 +48,7 @@
         <div class="toolbar workspace-heading">
           <h2>文件</h2>
           <div class="row">
+            <button id="batch-toggle" type="button" aria-pressed="false">批量操作</button>
             <button id="new-folder"><span aria-hidden="true">＋</span> 新建目录</button>
             <button id="choose-directory" type="button">上传文件夹</button>
             <button id="choose-files" class="primary"><span aria-hidden="true">↑</span> 上传文件</button>
@@ -80,6 +81,12 @@
             <button type="button" data-view="list" aria-pressed="true">列表</button>
             <button type="button" data-view="grid" aria-pressed="false">网格</button>
           </div>
+        </div>
+        <div id="batch-toolbar" class="row" hidden>
+          <label><input id="batch-all" type="checkbox"> 全选当前页</label>
+          <span id="batch-count" aria-live="polite"></span>
+          <button id="batch-move" type="button">批量移动</button>
+          <button id="batch-delete" type="button">批量删除</button>
         </div>
         <div class="file-scroll" tabindex="0" aria-label="文件列表">
         <div id="drop-zone">
@@ -117,6 +124,13 @@
     </section>
     <p id="notice" role="status" aria-live="polite"></p>
   </main>
+  <dialog id="batch-move-dialog" aria-labelledby="batch-move-title">
+    <form id="batch-move-form">
+      <h2 id="batch-move-title">批量移动</h2>
+      <label>目标目录<select id="batch-destination"></select></label>
+      <div class="row dialog-actions"><button type="button" data-close>取消</button><button class="primary">移动</button></div>
+    </form>
+  </dialog>
   <dialog id="settings-dialog" aria-labelledby="settings-title">
     <form id="settings-form">
       <h2 id="settings-title">站点设置</h2>
