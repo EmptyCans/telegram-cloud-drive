@@ -175,7 +175,16 @@ input::placeholder { color: var(--placeholder); }
 .view-switch button { padding: 4px 8px; border: 0; border-radius: 6px; font-size: 13px; }
 .view-switch button[aria-pressed="true"] { color: var(--accent-strong); background: var(--accent-soft); }
 #breadcrumbs button { border: 0; padding: 4px 7px; color: var(--accent-strong); white-space: normal; max-width: 100%; }
-#drop-zone { min-height: 245px; border: 1px solid var(--border); border-radius: 13px; container-type: inline-size; }
+#drop-zone, .inbox-file-list {
+  display: flex; flex-direction: column; height: clamp(245px, 60dvh, 560px); min-height: 0;
+  border: 1px solid var(--border); border-radius: 13px;
+}
+#drop-zone { container-type: inline-size; }
+:is(#drop-zone, .inbox-file-list) > .file-scroll {
+  flex: 1 1 0; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable;
+  border-radius: 0 0 12px 12px;
+}
+:is(#entries-heading, .inbox-list-heading) { flex: none; overflow: hidden; scrollbar-gutter: stable; }
 #manager .upload-target { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft); }
 .list-heading {
   display: flex; justify-content: space-between; padding: 10px 16px;
@@ -354,7 +363,7 @@ input::placeholder { color: var(--placeholder); }
 .inbox-meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 8px; margin-top: auto; padding-top: 4px; color: var(--muted); font-size: 12px; font-weight: 400; }
 .inbox-grid:not(.inbox-list) .inbox-meta { display: none; }
 .inbox-list .inbox-meta { justify-content: flex-start; }
-.inbox-list { display: block; border: 1px solid var(--border); border-radius: 12px; }
+.inbox-list { display: block; margin-top: 0; }
 .inbox-list li { display: flex; align-items: center; gap: 8px; padding: 0 10px; text-align: left; }
 .inbox-list li + li { border-top: 1px solid var(--border); }
 .inbox-panel .inbox-list .inbox-tile {
@@ -371,17 +380,16 @@ input::placeholder { color: var(--placeholder); }
 .inbox-list .inbox-kind { display: inline; }
 @media (min-width: 680px) {
   .inbox-panel { --inbox-list-columns: 44px minmax(0, 1fr) 142px 70px 76px 42px; }
-  .inbox-file-list:has(.inbox-list > li) > .inbox-list-heading, .inbox-list li {
+  .inbox-file-list:has(.inbox-list) > .inbox-list-heading, .inbox-list li {
     display: grid; grid-template-columns: var(--inbox-list-columns); gap: 8px; align-items: center;
   }
-  .inbox-file-list:has(.inbox-list > li) > .inbox-list-heading {
-    margin-top: 20px; padding: 8px 10px; border: 1px solid var(--border);
+  .inbox-file-list:has(.inbox-list) > .inbox-list-heading {
+    padding: 8px 10px; border-bottom: 1px solid var(--border);
     border-radius: 12px 12px 0 0; background: var(--list-heading); color: var(--muted); font-size: 12px;
   }
   .inbox-list-heading > :first-child { grid-column: span 2; }
   .inbox-list-heading > :nth-child(4) { text-align: right; }
   .inbox-list-heading > :last-child { text-align: center; }
-  .inbox-list:has(> li) { margin-top: 0; border-top: 0; border-radius: 0 0 12px 12px; }
   .inbox-panel .inbox-list .inbox-tile {
     grid-column: 1 / 6; grid-template-columns: subgrid; column-gap: 8px; min-height: 44px; padding: 4px 0;
   }
@@ -527,12 +535,6 @@ dialog.media-preview { width: calc(100% - 24px); max-width: 1440px; height: calc
   :is(.sidebar, #file-view, .inbox-panel, .notifications) > :is(.directory-scroll, .file-scroll, #notices, #inbox-status) { flex: 1 1 auto; }
   #notices { max-height: none; align-content: start; }
   #links-view { overflow: auto; }
-  #drop-zone { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
-  #entries-heading { flex: none; overflow: hidden; scrollbar-gutter: stable; }
-  #drop-zone > .file-scroll { border-radius: 0 0 12px 12px; }
-  #drop-zone:has(.entries-grid) > .file-scroll { border-radius: 12px; }
-  .inbox-panel > .inbox-file-list { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; }
-  .inbox-file-list > .file-scroll { flex: 1 1 0; }
-  .inbox-list-heading { flex: none; overflow: hidden; scrollbar-gutter: stable; }
-  .file-scroll { scrollbar-gutter: stable; }
+  #file-view > #drop-zone, .inbox-panel > .inbox-file-list { flex: 1 1 0; }
+  :is(#pagination, #inbox-pagination)[hidden] { display: flex !important; visibility: hidden; }
 }
