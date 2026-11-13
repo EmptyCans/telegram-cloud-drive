@@ -48,6 +48,9 @@
           </div>
           <input id="file-input" type="file" multiple hidden>
         </div>
+        <div id="upload-progress" class="upload-progress" hidden>
+          <span></span><progress max="100" aria-label="文件上传进度"></progress>
+        </div>
         <form id="search" class="row">
           <label class="search-field"><span class="icon icon-search" aria-hidden="true"></span><input name="q" type="search" placeholder="搜索文件或目录" aria-label="搜索名称"></label>
           <input name="tag" type="search" placeholder="筛选标签" aria-label="筛选标签">
@@ -131,10 +134,18 @@
       <div class="row dialog-actions"><button type="button" data-close>取消</button><button id="save-share" class="primary">保存并复制</button></div>
     </form>
   </dialog>
-  <dialog id="preview-dialog" aria-labelledby="preview-name">
-    <div class="toolbar"><h2 id="preview-name"></h2><button data-close>关闭</button></div>
-    <p id="preview-status" role="status"></p>
-    <div id="preview-content"></div>
+  <dialog id="preview-dialog" class="media-preview" aria-labelledby="preview-name">
+    <header class="media-header">
+      <div class="media-heading"><h2 id="preview-name"></h2><p class="media-details"></p></div>
+      <div class="row"><button type="button" data-preview-download>下载原文件</button><button type="button" data-preview-close aria-label="关闭">×</button></div>
+    </header>
+    <div class="media-stage">
+      <button type="button" data-previous aria-label="上一项">‹</button>
+      <div id="preview-content"></div>
+      <p id="preview-status" role="status"></p>
+      <button type="button" data-next aria-label="下一项">›</button>
+    </div>
+    <footer class="media-position" aria-live="polite"></footer>
   </dialog>
 </body>
 </html>

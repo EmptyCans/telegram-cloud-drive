@@ -1,13 +1,16 @@
+import { createMediaPreview } from "./media-preview.js";
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
 import { entryDateFormat, formatEntryKind, formatEntrySize } from "./entry-format.js";
 import { bindViewSwitch } from "./view-switch.js";
+import { pastedFiles, showUploadProgress, uploadFile } from "./uploads.js";
 
 const $ = (id) => document.getElementById(id);
 const code = location.pathname.match(/^\/s\/([a-zA-Z0-9_-]{12})$/)?.[1];
 const folder = new URLSearchParams(location.search).get("folder");
 const form = $("inbox-form");
+const panel = $("inbox-panel");
 const input = $("inbox-files");
 const submit = $("inbox-submit");
 const status = $("inbox-status");
@@ -16,8 +19,7 @@ const pageSize = 50;
 let page = 0;
 let maxUploadMiB;
 let listing = 0;
-let previewUrl;
-let previewRequest;
+
 let stopCovers;
 
 const viewSwitch = $("inbox-view-switch");
@@ -51,50 +53,15 @@ function fileAddress(item) {
   return endpoint + "/" + encodeURIComponent(item.id) + "/download";
 }
 
-function clearPreview() {
-  previewRequest?.abort();
-  previewRequest = undefined;
-  const content = $("preview-content");
-  content.querySelector("audio, video")?.pause();
-  content.replaceChildren();
-  if (previewUrl) URL.revokeObjectURL(previewUrl);
-  previewUrl = undefined;
-}
+const preview = createMediaPreview($("inbox-preview"), async (item, _type, signal) =>
+  (await request(fileAddress(item), { signal })).blob(), (item) => {
+    const link = document.createElement("a");
+    link.href = fileAddress(item);
+    link.download = item.name;
+    link.click();
+  });
 
-async function preview(item, type) {
-  clearPreview();
-  const controller = new AbortController();
-  previewRequest = controller;
-  const dialog = $("inbox-preview");
-  const message = $("preview-status");
-  $("inbox-preview-title").textContent = item.name;
-  message.textContent = "正在加载预览…";
-  dialog.showModal();
-  try {
-    const response = await request(fileAddress(item), { signal: controller.signal });
-    const blob = await response.blob();
-    if (controller.signal.aborted || !dialog.open) return;
-    const kind = type.split("/")[0];
-    const element = document.createElement(kind === "image" ? "img" : kind);
-    if (kind === "image") {
-      element.alt = item.name;
-    } else {
-      element.controls = true;
-      element.playsInline = true;
-    }
-    element.addEventListener("error", () => {
-      if (previewRequest === controller) message.textContent = "浏览器无法预览此文件，请下载后打开。";
-    });
-    previewUrl = URL.createObjectURL(blob.slice(0, blob.size, type));
-    element.src = previewUrl;
-    $("preview-content").append(element);
-    message.textContent = "";
-  } catch (error) {
-    if (!controller.signal.aborted) message.textContent = error.message;
-  }
-}
-
-function renderEntry(item) {
+function renderEntry(item, entries) {
   const row = document.createElement("li");
   const isFolder = item.kind === "folder";
   const type = previewType(item);
@@ -151,7 +118,7 @@ function renderEntry(item) {
       open.rel = "noopener noreferrer";
     } else {
       open.type = "button";
-      open.addEventListener("click", () => preview(item, type));
+      open.addEventListener("click", () => preview(item, entries));
     }
     const download = document.createElement("a");
     download.className = "inbox-download";
@@ -172,6 +139,7 @@ async function loadFolder() {
   const data = await response.json();
   if (sequence !== listing) return;
   maxUploadMiB = data.maxUploadMiB;
+  document.title = data.name;
   $("inbox-title").textContent = data.name;
   $("inbox-limit").textContent = "单个文件不超过 " + maxUploadMiB + " MiB";
   const up = $("inbox-up");
@@ -179,7 +147,7 @@ async function loadFolder() {
   if (!data.root) up.href = folderAddress(data.parent);
   const grid = $("inbox-entries");
   stopCovers?.();
-  grid.replaceChildren(...data.entries.map(renderEntry));
+  grid.replaceChildren(...data.entries.map(item => renderEntry(item, data.entries)));
   stopCovers = observeCovers(grid);
   $("inbox-empty").hidden = data.entries.length > 0;
   $("inbox-pagination").hidden = !page && !data.hasMore;
@@ -204,20 +172,18 @@ function folderError(error) {
 async function uploadFiles(files) {
   if (!files.length || form.hidden || submit.disabled) return;
   input.disabled = submit.disabled = true;
+  const progress = $("inbox-progress");
+  status.textContent = "";
   let completed = 0;
   const failures = [];
   try {
     for (const [index, file] of files.entries()) {
-      status.textContent = "正在上传 " + (index + 1) + "/" + files.length + " · " + file.name;
       try {
         if (!file.size || file.size > maxUploadMiB * 1024 * 1024) {
           throw new Error("文件必须大于 0 字节且不超过 " + maxUploadMiB + " MiB");
         }
-        await request(folderQuery({ name: file.name }), {
-          method: "POST",
-          headers: { "Content-Type": file.type || "application/octet-stream" },
-          body: file
-        });
+        const update = showUploadProgress(progress, file, index, files.length);
+        await uploadFile(folderQuery({ name: file.name }), file, {}, update);
         completed += 1;
       } catch (error) {
         failures.push(file.name + " · " + error.message);
@@ -231,6 +197,7 @@ async function uploadFiles(files) {
     input.value = "";
     if (completed && !form.hidden) await loadFolder().catch(folderError);
   } finally {
+    progress.hidden = true;
     input.disabled = submit.disabled = false;
   }
 }
@@ -238,6 +205,13 @@ async function uploadFiles(files) {
 submit.addEventListener("click", () => input.click());
 input.addEventListener("change", () => uploadFiles(Array.from(input.files)));
 form.addEventListener("submit", (event) => event.preventDefault());
+document.addEventListener("paste", (event) => {
+  if (form.hidden || $("inbox-preview").open) return;
+  const files = pastedFiles(event);
+  if (!files.length) return;
+  event.preventDefault();
+  void uploadFiles(files);
+});
 
 function isFileDrag(event) {
   return event.dataTransfer?.types.includes("Files");
@@ -268,11 +242,10 @@ $("inbox-next").addEventListener("click", () => {
   page += 1;
   loadFolder().catch(folderError);
 });
-$("inbox-preview-close").addEventListener("click", () => $("inbox-preview").close());
-$("inbox-preview").addEventListener("close", clearPreview);
 
 if (code) {
-  loadFolder().then(() => { status.textContent = ""; }).catch(folderError);
+  loadFolder().catch(folderError).finally(() => { panel.hidden = false; });
 } else {
   status.textContent = "公开文件夹链接已失效，请索取新的短链接。";
+  panel.hidden = false;
 }
