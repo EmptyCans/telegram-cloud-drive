@@ -595,6 +595,9 @@ function renderItem(item) {
   const open = button(item.name, folder ? () => openFolder(item) : openPreview ?? (() => download(item)));
   open.className = "entry-title";
   open.title = item.name;
+  const titleText = document.createElement("span");
+  titleText.textContent = item.name;
+  open.replaceChildren(titleText);
   const title = document.createElement("div");
   title.className = "entry-title-wrap";
   title.append(open);
