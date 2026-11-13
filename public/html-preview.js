@@ -46,6 +46,14 @@ async function loadPreview() {
     return;
   }
   const blob = await response.blob();
+  if (type === "text/plain") {
+    const text = document.createElement("pre");
+    text.className = "plain-text-preview";
+    text.textContent = await blob.text();
+    document.body.append(text);
+    status.hidden = true;
+    return;
+  }
   if (isWorkbookPreview(type)) {
     try {
       const { renderWorkbook } = await import("/document-renderers.js");
