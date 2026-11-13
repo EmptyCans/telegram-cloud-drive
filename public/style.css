@@ -323,12 +323,12 @@ input::placeholder { color: var(--placeholder); }
 .inbox-panel { max-width: 980px; margin: 22px auto; padding: clamp(16px, 4vw, 30px); background: var(--surface); border: 1px solid var(--border); border-radius: 20px; box-shadow: var(--shadow); }
 .inbox-panel a { color: var(--accent-strong); }
 #inbox-search { margin: 14px 0 0; }
-.inbox-breadcrumbs { flex: 1 1 160px; }
-.inbox-breadcrumbs { min-width: 0; }
-.inbox-breadcrumbs ol { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; list-style: none; margin: 0; padding: 0; }
-.inbox-breadcrumbs li { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.inbox-breadcrumbs { flex: 1 1 160px; min-width: 0; color: var(--muted); font-size: 13px; }
+.inbox-breadcrumbs ol { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-height: 31px; list-style: none; margin: 0; padding: 0; }
+.inbox-breadcrumbs li { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .inbox-breadcrumbs li + li::before { content: "/"; color: var(--muted); }
-.inbox-breadcrumbs a { font-size: 14px; }
+.inbox-breadcrumbs :is(a, h1) { padding: 4px 7px; color: var(--accent-strong); font-size: inherit; font-weight: 650; text-decoration: none; overflow-wrap: anywhere; }
+.inbox-breadcrumbs a:hover { background: var(--row-hover); border-radius: 6px; }
 .inbox-panel :is(a, strong) { overflow-wrap: anywhere; }
 #inbox-form { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; padding: 13px 16px; border: 1px dashed var(--hover-border); border-radius: 12px; background: var(--list-heading); }
 #inbox-form.inbox-dragging { border-color: var(--accent); outline: 2px solid var(--accent); background: var(--accent-soft); }
