@@ -198,7 +198,9 @@ async function loadFolderTree() {
       const icon = document.createElement("span");
       icon.className = "icon icon-folder";
       icon.setAttribute("aria-hidden", "true");
-      open.append(icon, name, sharingBadge(folder));
+      const badge = sharingBadge(folder);
+      badge.title = badge.textContent;
+      open.append(icon, name, badge);
       moveTarget(row, folder.id, folder.name);
       item.append(row);
       if (children.has(folder.id)) {

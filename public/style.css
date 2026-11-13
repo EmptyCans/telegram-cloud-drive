@@ -232,7 +232,15 @@ input::placeholder { color: var(--placeholder); }
 .sharing-badge { flex: none; padding: 1px 5px; border-radius: 6px; background: var(--list-heading); color: var(--muted); font-size: 11px; font-weight: 600; white-space: nowrap; }
 .sharing-badge.is-shared { color: var(--share-text); background: var(--share-background); }
 .sharing-badge.is-expired { color: var(--expired-text); background: var(--expired-background); }
-.tree-folder .sharing-badge { font-size: 10px; }
+.tree-folder .sharing-badge {
+  display: inline-grid; place-items: center; width: 14px; height: 14px;
+  padding: 0; border-radius: 50%; font-size: 0;
+}
+.tree-folder .sharing-badge::before {
+  content: ""; width: 5px; height: 5px; border: 1px solid currentColor; border-radius: 50%;
+}
+.tree-folder .sharing-badge.is-shared::before { background: currentColor; }
+.tree-folder .sharing-badge.is-expired::before { width: 6px; height: 0; border-width: 1px 0 0; border-radius: 0; }
 .actions { flex-wrap: nowrap; gap: 6px; }
 .actions button, summary { font-size: 13px; }
 .actions > button, summary { padding: 6px 10px; }
