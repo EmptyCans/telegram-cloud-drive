@@ -259,7 +259,7 @@ input::placeholder { color: var(--placeholder); }
 .sharing-badge.is-expired { color: var(--expired-text); background: var(--expired-background); }
 .tree-folder .sharing-badge {
   position: relative; width: 14px; height: 14px;
-  padding: 0; border-radius: 50%; font-size: 0;
+  padding: 0; border-radius: 50%; background: transparent; font-size: 0;
 }
 .tree-folder .sharing-badge::before {
   content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
