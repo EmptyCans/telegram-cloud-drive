@@ -1,4 +1,4 @@
-import { isDocumentPreview, previewType } from "../public/media-types.js";
+import { previewType } from "../public/media-types.js";
 
 const MiB = 1024 * 1024;
 const downloadLimit = 20 * MiB;
@@ -336,7 +336,7 @@ async function content(db, env, column, id, preview, inboxCode = null) {
   const upstream = await fetch(`https://api.telegram.org/file/bot${token}/${file.file_path}`, { redirect: "manual" })
     .catch(() => null);
   if (!upstream?.ok || !upstream.body) throw new HttpError(502, "下载失败，请稍后重试");
-  const inlineType = imageTypes.has(type) || (column === "share_code" && type && !isDocumentPreview(type)) ? type : null;
+  const inlineType = imageTypes.has(type) ? type : null;
   const encodedName = encodeURIComponent(item.name.toWellFormed()).replace(/['()*]/g, (character) =>
     "%" + character.charCodeAt(0).toString(16).toUpperCase());
   return new Response(upstream.body, {
@@ -504,7 +504,8 @@ async function handle(request, env) {
       return content(db, env, "id", file, false, shortShare[1]);
     }
     if (file) throw new HttpError(404, "文件不存在");
-    if (isDocumentPreview(previewType(item))) return sharePage(env, url, "/html-preview");
+    const type = previewType(item);
+    if (type && !imageTypes.has(type)) return sharePage(env, url, "/html-preview");
     return content(db, env, "share_code", shortShare[1], true);
   }
   const sharedFile = pathname.match(/^\/api\/share\/([a-zA-Z0-9_-]{12})\/download$/);

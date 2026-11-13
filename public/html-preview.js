@@ -79,6 +79,7 @@ async function loadPreview() {
     player.className = "shared-media-player";
     player.controls = true;
     player.playsInline = true;
+    if (code && !file && kind === "video") player.classList.add("shared-video-full");
     player.setAttribute("aria-label", name);
     player.addEventListener("error", () => {
       player.hidden = true;
