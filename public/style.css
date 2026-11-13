@@ -279,7 +279,7 @@ input::placeholder { color: var(--placeholder); }
 .inbox-info { display: flex; flex-direction: column; align-self: stretch; min-width: 0; }
 .inbox-name { font-weight: 600; }
 .inbox-meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 8px; margin-top: auto; padding-top: 4px; color: var(--muted); font-size: 12px; font-weight: 400; }
-.inbox-grid:not(.inbox-list) .inbox-meta time { flex-basis: 100%; }
+.inbox-grid:not(.inbox-list) .inbox-meta { display: none; }
 .inbox-list .inbox-meta { justify-content: flex-start; }
 .inbox-list { display: block; border: 1px solid var(--border); border-radius: 12px; }
 .inbox-list li { display: flex; align-items: center; gap: 8px; padding: 0 10px; text-align: left; }
