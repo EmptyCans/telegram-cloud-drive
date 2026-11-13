@@ -301,7 +301,7 @@ input::placeholder { color: var(--placeholder); }
 #pagination { justify-content: flex-end; margin-top: 16px; color: var(--muted); font-size: 13px; }
 .notifications { min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
 .notifications-heading { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
-.notifications-heading h2 { font-size: 16px; }
+.notifications-heading h2 { order: -1; margin-inline-end: auto; font-size: 16px; }
 .github-project { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; color: var(--muted); }
 .github-project:hover, .github-project:focus-visible { background: var(--row-hover); color: var(--text); }
 .github-project::before { content: ""; width: 16px; height: 16px; background: currentColor; mask: url("/github-mark.svg") center / contain no-repeat; }
