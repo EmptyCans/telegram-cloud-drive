@@ -4,6 +4,7 @@ import { formatEntryKind, formatEntrySize } from "./entry-format.js";
 export function createMediaPreview(dialog, load, download) {
   const title = dialog.querySelector("h2");
   const details = dialog.querySelector(".media-details");
+  const counter = dialog.querySelector(".media-position");
   const status = dialog.querySelector("#preview-status");
   const content = dialog.querySelector("#preview-content");
   const previous = dialog.querySelector("[data-previous]");
@@ -29,8 +30,9 @@ export function createMediaPreview(dialog, load, download) {
     request = controller;
     const { item, type } = items[index];
     title.textContent = title.title = item.name;
-    details.textContent = [formatEntryKind(item), Number.isFinite(item.size) ? formatEntrySize(item.size) : "",
-      (index + 1) + " / " + items.length].filter(Boolean).join(" · ");
+    details.textContent = [formatEntryKind(item), Number.isFinite(item.size) ? formatEntrySize(item.size) : ""]
+      .filter(Boolean).join(" · ");
+    counter.textContent = (index + 1) + " / " + items.length;
     previous.disabled = index === 0;
     next.disabled = index === items.length - 1;
     status.textContent = "正在加载预览…";
