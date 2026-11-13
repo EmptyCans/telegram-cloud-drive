@@ -173,6 +173,7 @@ async function loadFolder() {
   const data = await response.json();
   if (sequence !== listing) return;
   maxUploadMiB = data.maxUploadMiB;
+  document.title = data.name;
   $("inbox-title").textContent = data.name;
   $("inbox-limit").textContent = "单个文件不超过 " + maxUploadMiB + " MiB";
   const up = $("inbox-up");
