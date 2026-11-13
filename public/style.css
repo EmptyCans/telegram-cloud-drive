@@ -253,6 +253,7 @@ input::placeholder { color: var(--placeholder); }
 .notifications h2 { margin-bottom: 12px; font-size: 16px; }
 #notices { display: grid; gap: 8px; max-height: 60dvh; overflow-y: auto; list-style: none; margin: 0; padding: 0; }
 #notices:not(:empty) + .no-notices { display: none; }
+#notices:empty { display: none; }
 .no-notices { font-size: 13px; }
 .upload-progress { display: grid; gap: 6px; margin: 12px 0; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .upload-progress progress { width: 100%; height: 8px; accent-color: var(--accent); }
