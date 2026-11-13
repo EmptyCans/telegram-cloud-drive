@@ -8,7 +8,7 @@ import { droppedItems, pastedFiles, selectedDirectoryItems, showUploadProgress, 
 
 const $ = (id) => document.getElementById(id);
 const code = location.pathname.match(/^\/s\/([a-zA-Z0-9_-]{12})$/)?.[1];
-const folder = new URLSearchParams(location.search).get("folder");
+let folder = new URLSearchParams(location.search).get("folder");
 const form = $("inbox-form");
 const panel = $("inbox-panel");
 const input = $("inbox-files");
@@ -22,6 +22,8 @@ const pageSize = 50;
 let page = 0;
 let maxUploadMiB;
 let listing = 0;
+let navigating = false;
+let treeSnapshot;
 
 let stopCovers;
 
@@ -112,6 +114,7 @@ function renderEntry(item, entries) {
   row.append(open);
   if (isFolder) {
     open.href = folderAddress(item.id);
+    open.dataset.folderLink = "";
   } else if (documentPreview || type) {
     if (documentPreview) {
       const url = new URL(location.pathname, location.origin);
@@ -145,6 +148,17 @@ function renderFolderTree(data) {
   for (let item = byId.get(current); item && !ancestors.has(item.id); item = byId.get(item.parent_id)) {
     ancestors.add(item.id);
   }
+  const snapshot = JSON.stringify(data.folders);
+  if (snapshot === treeSnapshot) {
+    for (const link of tree.querySelectorAll(".tree-folder")) {
+      if (link.dataset.folderId === current) link.setAttribute("aria-current", "location");
+      else link.removeAttribute("aria-current");
+    }
+    for (const toggle of tree.querySelectorAll('.tree-toggle[aria-expanded="false"]')) {
+      if (toggle.dataset.folder !== current && ancestors.has(toggle.dataset.folder)) toggle.click();
+    }
+    return;
+  }
   const expanded = new Set([...tree.querySelectorAll('[aria-expanded="true"]')].map(toggle => toggle.dataset.folder));
   for (const item of data.folders) {
     if (!children.has(item.parent_id)) children.set(item.parent_id, []);
@@ -177,6 +191,8 @@ function renderFolderTree(data) {
       }
       const link = document.createElement("a");
       link.className = "tree-folder";
+      link.dataset.folderId = item.id;
+      link.dataset.folderLink = "";
       link.href = folderAddress(item.id === data.rootId ? null : item.id);
       link.title = item.name;
       if (item.id === current) link.setAttribute("aria-current", "location");
@@ -193,14 +209,25 @@ function renderFolderTree(data) {
     return list;
   }
   tree.replaceChildren(branch(null));
+  treeSnapshot = snapshot;
   $("inbox-sidebar").hidden = false;
 }
 
-async function loadFolder() {
+async function loadFolder(target = folder, offsetPage = page, historyMode) {
   const sequence = ++listing;
-  const response = await request(folderQuery({ offset: page * pageSize }));
-  const data = await response.json();
+  let data;
+  try {
+    const response = await request(folderQuery({ offset: offsetPage * pageSize }, target));
+    data = await response.json();
+  } catch (error) {
+    if (sequence !== listing) return;
+    throw error;
+  }
   if (sequence !== listing) return;
+  if (historyMode === "push") history.pushState(null, "", folderAddress(target));
+  if (folder !== target || page !== offsetPage) panel.querySelector(".file-scroll").scrollTop = 0;
+  folder = target;
+  page = offsetPage;
   maxUploadMiB = data.maxUploadMiB;
   document.title = data.name;
   $("inbox-title").textContent = data.name;
@@ -221,6 +248,32 @@ async function loadFolder() {
   form.hidden = false;
   viewSwitch.hidden = false;
 }
+
+async function navigateFolder(target, historyMode) {
+  navigating = true;
+  const expected = listing + 1;
+  try {
+    await loadFolder(target, 0, historyMode);
+  } catch (error) {
+    if (historyMode === "pop") history.replaceState(null, "", folderAddress(folder));
+    status.textContent = error.message;
+  } finally {
+    if (expected === listing) navigating = false;
+  }
+}
+
+$("inbox-up").dataset.folderLink = "";
+panel.addEventListener("click", event => {
+  const link = event.target.closest("a[data-folder-link]");
+  if (!link || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  if (submit.disabled) return;
+  const target = new URL(link.href).searchParams.get("folder");
+  if (target !== folder || navigating) void navigateFolder(target, "push");
+});
+window.addEventListener("popstate", () => {
+  void navigateFolder(new URLSearchParams(location.search).get("folder"), "pop");
+});
 
 function folderError(error) {
   status.textContent = error.message;
@@ -248,7 +301,8 @@ function setUploadBusy(busy) {
 }
 
 async function uploadItems(items) {
-  if (form.hidden || submit.disabled) return;
+  if (form.hidden || submit.disabled || navigating) return;
+  const uploadFolder = folder;
   setUploadBusy(true);
   const progress = $("inbox-progress");
   status.textContent = "";
@@ -281,7 +335,7 @@ async function uploadItems(items) {
       } catch (error) {
         failures.push([...path, ...(file ? [file.name] : [])].join("/") + " · " + error.message);
         if (error.status === 404) {
-          folderError(error);
+          if (folder === uploadFolder && !navigating) folderError(error);
           break;
         }
       }
@@ -289,7 +343,7 @@ async function uploadItems(items) {
     const summary = ["已上传 " + completed + "/" + total + " 个文件"];
     if (created) summary.push("已创建 " + created + " 个文件夹");
     status.textContent = [...summary, ...failures].join("\n");
-    if ((completed || created) && !form.hidden) await loadFolder().catch(folderError);
+    if ((completed || created) && !form.hidden && !navigating) await loadFolder().catch(folderError);
   } catch (error) {
     folderError(error);
   } finally {
@@ -312,6 +366,7 @@ directoryInput.addEventListener("change", () => {
   if (items.length) void uploadItems(items);
 });
 mkdir.addEventListener("click", async () => {
+  if (navigating) return;
   const name = prompt("文件夹名称")?.trim();
   if (!name) return;
   setUploadBusy(true);
@@ -358,12 +413,10 @@ window.addEventListener("drop", (event) => {
 });
 
 $("inbox-previous").addEventListener("click", () => {
-  page -= 1;
-  loadFolder().catch(folderError);
+  if (!navigating && !submit.disabled) loadFolder(folder, page - 1).catch(folderError);
 });
 $("inbox-next").addEventListener("click", () => {
-  page += 1;
-  loadFolder().catch(folderError);
+  if (!navigating && !submit.disabled) loadFolder(folder, page + 1).catch(folderError);
 });
 
 if (code) {
