@@ -106,18 +106,18 @@
             <button id="batch-delete" type="button">批量删除</button>
           </div>
         </div>
-        <div class="file-scroll" tabindex="0" aria-label="文件列表">
         <div id="drop-zone">
           <div id="entries-heading" class="list-heading" aria-hidden="true">
             <span>名称</span><span class="list-column">创建时间</span><span class="list-column">类型</span>
             <span class="list-column">大小</span><span>操作</span>
           </div>
-          <ul id="entries"></ul>
-          <div id="empty" hidden>
-            <span class="empty-mark" aria-hidden="true"><span class="icon icon-folder"></span></span>
-            <p id="empty-message"></p>
+          <div class="file-scroll" tabindex="0" aria-label="文件列表">
+            <ul id="entries"></ul>
+            <div id="empty" hidden>
+              <span class="empty-mark" aria-hidden="true"><span class="icon icon-folder"></span></span>
+              <p id="empty-message"></p>
+            </div>
           </div>
-        </div>
         </div>
         <div id="pagination" class="row" hidden>
           <button id="previous">上一页</button><span id="page"></span><button id="next">下一页</button>
@@ -135,7 +135,10 @@
         </div>
       </section>
       <aside class="notifications" aria-labelledby="notifications-title">
-        <h2 id="notifications-title">通知</h2>
+        <div class="notifications-heading">
+          <a class="github-project" href="https://github.com/innboom/telegram-cloud-drive" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 查看项目" title="在 GitHub 查看项目"></a>
+          <h2 id="notifications-title">通知</h2>
+        </div>
         <ol id="notices" aria-live="polite"></ol>
         <p class="no-notices">暂无通知</p>
       </aside>

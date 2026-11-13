@@ -175,7 +175,16 @@ input::placeholder { color: var(--placeholder); }
 .view-switch button { padding: 4px 8px; border: 0; border-radius: 6px; font-size: 13px; }
 .view-switch button[aria-pressed="true"] { color: var(--accent-strong); background: var(--accent-soft); }
 #breadcrumbs button { border: 0; padding: 4px 7px; color: var(--accent-strong); white-space: normal; max-width: 100%; }
-#drop-zone { min-height: 245px; border: 1px solid var(--border); border-radius: 13px; container-type: inline-size; }
+#drop-zone, .inbox-file-list {
+  display: flex; flex-direction: column; height: clamp(245px, 60dvh, 560px); min-height: 0;
+  border: 1px solid var(--border); border-radius: 13px;
+}
+:is(#drop-zone, .inbox-file-list) { container-type: inline-size; --file-list-columns: 48px minmax(0, 1fr) 142px 62px 70px 94px; }
+:is(#drop-zone, .inbox-file-list) > .file-scroll {
+  flex: 1 1 0; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable;
+  border-radius: 0 0 12px 12px;
+}
+:is(#entries-heading, .inbox-list-heading) { flex: none; overflow: hidden; scrollbar-gutter: stable; }
 #manager .upload-target { outline: 2px dashed var(--accent); outline-offset: -2px; background: var(--accent-soft); }
 .list-heading {
   display: flex; justify-content: space-between; padding: 10px 16px;
@@ -250,7 +259,7 @@ input::placeholder { color: var(--placeholder); }
 .entry-badges { display: contents; }
 @container (min-width: 620px) {
   #entries-heading, #entries:not(.entries-grid) > li {
-    display: grid; grid-template-columns: 48px minmax(0, 1fr) 142px 62px 70px 94px;
+    display: grid; grid-template-columns: var(--file-list-columns);
     gap: 0 12px; padding-inline: 13px; align-items: center;
   }
   #entries-heading > :first-child { grid-column: span 2; }
@@ -300,7 +309,11 @@ input::placeholder { color: var(--placeholder); }
 .empty-mark { width: 54px; height: 54px; border-radius: 16px; }
 #pagination { justify-content: flex-end; margin-top: 16px; color: var(--muted); font-size: 13px; }
 .notifications { min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
-.notifications h2 { margin-bottom: 12px; font-size: 16px; }
+.notifications-heading { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+.notifications-heading h2 { order: -1; margin-inline-end: auto; font-size: 16px; }
+.github-project { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; color: var(--muted); }
+.github-project:hover, .github-project:focus-visible { background: var(--row-hover); color: var(--text); }
+.github-project::before { content: ""; width: 16px; height: 16px; background: currentColor; mask: url("/github-mark.svg") center / contain no-repeat; }
 #notices { display: grid; gap: 8px; max-height: 60dvh; overflow-y: auto; list-style: none; margin: 0; padding: 0; }
 #notices:not(:empty) + .no-notices { display: none; }
 #notices:empty { display: none; }
@@ -350,38 +363,40 @@ input::placeholder { color: var(--placeholder); }
 .inbox-meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 8px; margin-top: auto; padding-top: 4px; color: var(--muted); font-size: 12px; font-weight: 400; }
 .inbox-grid:not(.inbox-list) .inbox-meta { display: none; }
 .inbox-list .inbox-meta { justify-content: flex-start; }
-.inbox-list { display: block; border: 1px solid var(--border); border-radius: 12px; }
-.inbox-list li { display: flex; align-items: center; gap: 8px; padding: 0 10px; text-align: left; }
+.inbox-list { display: block; margin-top: 0; }
+.inbox-list li { display: flex; align-items: center; gap: 12px; padding: 10px 13px; min-height: 62px; text-align: left; border-radius: 0; }
 .inbox-list li + li { border-top: 1px solid var(--border); }
 .inbox-panel .inbox-list .inbox-tile {
   display: grid; flex: 1; grid-template-columns: 48px minmax(0, 1fr);
-  justify-items: start; align-items: center; align-content: center; min-width: 0; min-height: 56px;
-  padding: 6px 0; text-align: left;
+  justify-items: start; align-items: center; align-content: center; gap: 12px; min-width: 0; min-height: 0;
+  padding: 0; text-align: left; font-size: inherit;
 }
-.inbox-list .inbox-art { height: 42px; }
+.inbox-list .inbox-art { height: 38px; }
+.inbox-list .inbox-icon { margin-top: 0; }
+.inbox-list .inbox-file-art { width: 48px; height: 38px; border-radius: 10px; background: var(--accent-soft); }
 .inbox-list .inbox-file-art .file-symbol { width: 29px; height: 33px; padding-bottom: 4px; }
 .inbox-list .inbox-file-art .file-symbol::before { width: 8px; height: 8px; }
 .inbox-list .inbox-file-art .file-symbol > span { font-size: 8px; }
-.inbox-list .inbox-download { flex: none; }
+.inbox-panel .inbox-list .inbox-download {
+  flex: none; margin: 0; padding: 7px 10px; border: 1px solid var(--border); border-radius: 10px;
+  color: var(--text); background: var(--surface); font-size: 13px; font-weight: 650; text-decoration: none;
+}
+.inbox-panel .inbox-list .inbox-download:hover { background: var(--row-hover); border-color: var(--hover-border); }
 .inbox-kind, .inbox-list-heading { display: none; }
 .inbox-list .inbox-kind { display: inline; }
-@media (min-width: 680px) {
-  .inbox-panel { --inbox-list-columns: 44px minmax(0, 1fr) 142px 70px 76px 42px; }
-  .inbox-list-heading:has(+ .inbox-list > li), .inbox-list li {
-    display: grid; grid-template-columns: var(--inbox-list-columns); gap: 8px; align-items: center;
+@container (min-width: 620px) {
+  .inbox-file-list:has(.inbox-list) > .inbox-list-heading, .inbox-list li {
+    display: grid; grid-template-columns: var(--file-list-columns); gap: 0 12px; align-items: center;
   }
-  .inbox-list-heading:has(+ .inbox-list > li) {
-    margin-top: 20px; padding: 8px 10px; border: 1px solid var(--border);
-    border-radius: 12px 12px 0 0; background: var(--list-heading); color: var(--muted); font-size: 12px;
+  .inbox-file-list:has(.inbox-list) > .inbox-list-heading {
+    padding-inline: 13px;
   }
   .inbox-list-heading > :first-child { grid-column: span 2; }
-  .inbox-list-heading > :nth-child(4) { text-align: right; }
-  .inbox-list-heading > :last-child { text-align: center; }
-  .inbox-list-heading:has(+ .inbox-list > li) + .inbox-list { margin-top: 0; border-top: 0; border-radius: 0 0 12px 12px; }
+  .inbox-list-heading > :nth-child(4), .inbox-list-heading > :last-child { text-align: right; }
   .inbox-panel .inbox-list .inbox-tile {
-    grid-column: 1 / 6; grid-template-columns: subgrid; column-gap: 8px; min-height: 44px; padding: 4px 0;
+    grid-column: 1 / 6; grid-template-columns: subgrid; row-gap: 0;
   }
-  .inbox-list .inbox-art { grid-column: 1; height: 36px; }
+  .inbox-list .inbox-art { grid-column: 1; }
   .inbox-list .inbox-info, .inbox-list .inbox-meta { display: contents; }
   .inbox-list :is(.inbox-name, .inbox-kind, .inbox-size, time) { grid-row: 1; min-width: 0; }
   .inbox-list .inbox-name { grid-column: 2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -389,7 +404,7 @@ input::placeholder { color: var(--placeholder); }
   .inbox-list time { grid-column: 3; }
   .inbox-list .inbox-kind { grid-column: 4; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .inbox-list .inbox-size { grid-column: 5; justify-self: end; }
-  .inbox-list .inbox-download { grid-column: 6; justify-self: center; }
+  .inbox-list .inbox-download { grid-column: 6; justify-self: end; }
 }
 .inbox-art { display: grid; place-items: center; width: 100%; height: 76px; }
 .inbox-icon { position: relative; display: block; width: 56px; height: 44px; margin-top: 4px; }
@@ -523,6 +538,5 @@ dialog.media-preview { width: calc(100% - 24px); max-width: 1440px; height: calc
   :is(.sidebar, #file-view, .inbox-panel, .notifications) > :is(.directory-scroll, .file-scroll, #notices, #inbox-status) { flex: 1 1 auto; }
   #notices { max-height: none; align-content: start; }
   #links-view { overflow: auto; }
-  #entries-heading, .inbox-list-heading { position: sticky; top: 0; z-index: 1; }
-  .file-scroll { scrollbar-gutter: stable; }
+  #file-view > #drop-zone, .inbox-panel > .inbox-file-list { flex: 1 1 0; }
 }

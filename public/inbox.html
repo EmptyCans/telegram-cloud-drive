@@ -71,19 +71,24 @@
             <button type="button" data-view="grid" aria-pressed="true">网格</button>
           </div>
       </div>
-      <div class="file-scroll" tabindex="0" aria-label="文件列表">
-      <div class="inbox-list-heading" aria-hidden="true">
-        <span>名称</span><span>创建时间</span><span>类型</span><span>大小</span><span>操作</span>
-      </div>
-      <ul id="inbox-entries" class="inbox-grid" aria-label="文件"></ul>
-      <p id="inbox-empty" hidden>这个文件夹还没有文件。</p>
+      <div class="inbox-file-list">
+        <div class="inbox-list-heading list-heading" aria-hidden="true">
+          <span>名称</span><span>创建时间</span><span>类型</span><span>大小</span><span>操作</span>
+        </div>
+        <div class="file-scroll" tabindex="0" aria-label="文件列表">
+          <ul id="inbox-entries" class="inbox-grid" aria-label="文件"></ul>
+          <p id="inbox-empty" hidden>这个文件夹还没有文件。</p>
+        </div>
       </div>
       <div id="inbox-pagination" class="row" hidden>
         <button id="inbox-previous">上一页</button><span id="inbox-page"></span><button id="inbox-next">下一页</button>
       </div>
     </section>
     <aside class="notifications inbox-notifications" aria-labelledby="inbox-notice-title">
-      <h2 id="inbox-notice-title">通知</h2>
+      <div class="notifications-heading">
+        <a class="github-project" href="https://github.com/innboom/telegram-cloud-drive" target="_blank" rel="noopener noreferrer" aria-label="在 GitHub 查看项目" title="在 GitHub 查看项目"></a>
+        <h2 id="inbox-notice-title">通知</h2>
+      </div>
       <div id="inbox-progress" class="upload-progress" hidden>
         <span></span><progress max="100" aria-label="文件上传进度"></progress>
       </div>
