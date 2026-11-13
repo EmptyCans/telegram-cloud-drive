@@ -436,6 +436,7 @@ function shareStatus(item) {
 }
 
 function shareAddress(item) {
+  if (item.share_code) return location.origin + "/s/" + item.share_code;
   const suffix = previewType(item) ? "/preview" : "";
   const path = item.kind === "folder" ? "/inbox#" + item.share_token : "/f/" + item.share_token + suffix;
   return location.origin + path;
@@ -443,6 +444,12 @@ function shareAddress(item) {
 
 async function copyShare(item) {
   if (shareExpired(item)) return editShare(item);
+  if (!item.share_code) {
+    const { share_code } = await api(itemPath(item) + "/short-link", {
+      method: "POST", json: { token: item.share_token }
+    });
+    item.share_code = share_code;
+  }
   const link = shareAddress(item);
   try {
     await navigator.clipboard.writeText(link);

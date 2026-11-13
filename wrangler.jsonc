@@ -10,7 +10,8 @@
     "directory": "./public",
     "run_worker_first": [
       "/api/*",
-      "/f/*"
+      "/f/*",
+      "/s/*"
     ]
   },
   "kv_namespaces": [
