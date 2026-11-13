@@ -513,34 +513,10 @@ async function activeShortShare(db, code) {
   return item;
 }
 
-async function dragSignature(env, id, expires) {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey("raw", encoder.encode(env.ADMIN_TOKEN), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  return new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(`drag-download:${id}:${expires}`)));
-}
-
 async function handle(request, env) {
   const url = new URL(request.url);
   const { pathname } = url;
   const { method } = request;
-  const dragDownload = pathname.match(/^\/api\/drag-download\/([a-f0-9-]{36})$/);
-  if (dragDownload && method === "GET") {
-    const id = dragDownload[1];
-    const expires = url.searchParams.get("expires") ?? "";
-    const signature = url.searchParams.get("sig") ?? "";
-    const now = Math.floor(Date.now() / 1000);
-    if (!env.ADMIN_TOKEN || !/^\d{10}$/.test(expires) || Number(expires) <= now ||
-        Number(expires) > now + 120 || !/^[a-f0-9]{64}$/.test(signature)) {
-      throw new HttpError(404, "下载凭证已失效");
-    }
-    const supplied = Uint8Array.from(signature.match(/../g), byte => parseInt(byte, 16));
-    if (!crypto.subtle.timingSafeEqual(supplied, await dragSignature(env, id, expires))) {
-      throw new HttpError(404, "下载凭证已失效");
-    }
-    const response = await content(await database(env), env, "id", id, false);
-    response.headers.set("Content-Security-Policy", "default-src 'none'; sandbox allow-downloads");
-    return response;
-  }
   if (pathname === "/api/config" && method === "GET") return json(await getConfig(env));
   if (pathname === "/api/health" && method === "GET") return json({ status: "ok" });
   const shortShare = pathname.match(/^\/s\/([a-zA-Z0-9_-]{12})$/);
@@ -586,13 +562,6 @@ async function handle(request, env) {
   }
   if (!pathname.startsWith("/api/")) throw new HttpError(404, "地址不存在");
   await requireAdmin(request, env);
-  const dragTicket = pathname.match(/^\/api\/entries\/([a-f0-9-]{36})\/drag-ticket$/);
-  if (dragTicket && method === "POST") {
-    const id = dragTicket[1];
-    const expires = Math.floor(Date.now() / 1000) + 120;
-    const sig = Array.from(await dragSignature(env, id, expires), byte => byte.toString(16).padStart(2, "0")).join("");
-    return json({ path: `/api/drag-download/${id}?expires=${expires}&sig=${sig}`, expires });
-  }
   if (pathname === "/api/session" && method === "GET") return json({ ok: true });
   if (pathname === "/api/config" && method === "PUT") {
     const settings = validateConfig(await bodyJson(request));
