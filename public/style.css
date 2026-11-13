@@ -536,5 +536,4 @@ dialog.media-preview { width: calc(100% - 24px); max-width: 1440px; height: calc
   #notices { max-height: none; align-content: start; }
   #links-view { overflow: auto; }
   #file-view > #drop-zone, .inbox-panel > .inbox-file-list { flex: 1 1 0; }
-  #pagination[hidden] { display: flex !important; visibility: hidden; }
 }
