@@ -411,7 +411,7 @@ function shareExpired(item) {
 }
 
 function sharingBadge(item) {
-  const hasLink = Boolean(item.share_token || item.has_share);
+  const hasLink = Boolean(item.share_code || item.has_share);
   const directlyShared = hasLink && !shareExpired(item);
   const inherited = !directlyShared && folderPath(item.parent_id).some(
     (folder) => folder.has_share && !shareExpired(folder)
@@ -435,19 +435,13 @@ function shareStatus(item) {
   return (shareExpired(item) ? "已过期 · " : "到期时间 · ") + entryDateFormat.format(new Date(item.share_expires_at));
 }
 
-async function shareAddress(item) {
-  if (!item.share_code) {
-    const { share_code } = await api(itemPath(item) + "/short-link", {
-      method: "POST", json: { token: item.share_token }
-    });
-    item.share_code = share_code;
-  }
+function shareAddress(item) {
   return location.origin + "/s/" + item.share_code;
 }
 
 async function copyShare(item) {
   if (shareExpired(item)) return editShare(item);
-  const link = await shareAddress(item);
+  const link = shareAddress(item);
   try {
     await navigator.clipboard.writeText(link);
     notice("已复制公开链接");
@@ -461,9 +455,9 @@ function editShare(item) {
   const inbox = item.kind === "folder";
   $("share-title").textContent = inbox ? "公开文件夹 · " + item.name : "分享 · " + item.name;
   const access = inbox ? "持有链接的人可以浏览、下载及上传此文件夹及其子文件夹内的文件。" : "持有链接的人可以读取此文件。";
-  $("share-description").textContent = item.share_token ? access + " " + shareStatus(item) : access;
+  $("share-description").textContent = item.share_code ? access + " " + shareStatus(item) : access;
   const duration = $("share-duration");
-  duration.options[0].hidden = !item.share_token || shareExpired(item);
+  duration.options[0].hidden = !item.share_code || shareExpired(item);
   duration.value = duration.options[0].hidden ? (inbox ? "604800" : "permanent") : "keep";
   $("share-dialog").showModal();
 }
@@ -505,17 +499,11 @@ async function refreshLinks() {
     const actions = document.createElement("div");
     actions.className = "row links-actions";
     if (!shareExpired(item)) {
-      const open = button("打开分享", async () => {
-        const tab = window.open("about:blank", "_blank");
-        if (!tab) throw new Error("浏览器拦截了新标签页，请允许弹出窗口后重试。");
-        tab.opener = null;
-        try {
-          tab.location.replace(await shareAddress(item));
-        } catch (error) {
-          tab.close();
-          throw error;
-        }
-      });
+      const open = document.createElement("a");
+      open.href = shareAddress(item);
+      open.target = "_blank";
+      open.rel = "noopener noreferrer";
+      open.textContent = "打开分享";
       actions.append(open, button("复制链接", () => copyShare(item)));
     }
     actions.append(button("修改有效期", () => editShare(item)), button("撤销", () => revokeShare(item)));
@@ -661,7 +649,7 @@ function renderItem(item) {
     actions.append(button("下载", () => download(item)));
     if (openPreview) menu.append(button("预览", openPreview));
   }
-  if (item.share_token) {
+  if (item.share_code) {
     if (!shareExpired(item)) menu.append(button("复制链接", () => copyShare(item)));
     menu.append(button("修改有效期", () => editShare(item)), button("撤销链接", () => revokeShare(item)));
   } else {
