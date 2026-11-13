@@ -73,7 +73,7 @@ function renderEntry(item, entries) {
   open.className = "inbox-tile";
   open.title = item.name;
   const icon = document.createElement("span");
-  icon.className = "inbox-icon " + (isFolder ? "inbox-folder-icon" : "inbox-file-art");
+  icon.className = "inbox-icon " + (isFolder ? "icon-folder" : "inbox-file-art");
   if (!isFolder) icon.append(fileIcon(item.name, type));
   if (!isFolder && !documentPreview && (type?.startsWith("image/") || type?.startsWith("video/"))) {
     icon.dataset.coverType = type;
