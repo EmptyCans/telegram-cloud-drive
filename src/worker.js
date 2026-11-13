@@ -552,7 +552,7 @@ async function handle(request, env) {
   if (pathname === "/api/entries" && method === "GET") return list(db, url);
   if (pathname === "/api/folders" && method === "GET") {
     const { results } = await db.prepare(`SELECT id, parent_id, name,
-      share_code IS NOT NULL AS has_share, share_expires_at FROM entries
+      share_code, share_expires_at FROM entries
       WHERE kind = 'folder' AND deleted_at IS NULL ORDER BY name COLLATE NOCASE, id`).all();
     return json({ folders: results });
   }

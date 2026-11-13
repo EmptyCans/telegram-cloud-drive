@@ -340,6 +340,17 @@ function openDocument(item, type) {
   const tab = window.open("about:blank", "_blank");
   if (!tab) throw new Error("浏览器拦截了新标签页，请允许弹出窗口后重试。");
   tab.opener = null;
+  if (item.share_code && !shareExpired(item)) {
+    tab.location.replace(shareAddress(item));
+    return;
+  }
+  const sharedFolder = folderPath(item.parent_id).findLast((folder) => folder.share_code && !shareExpired(folder));
+  if (sharedFolder) {
+    const url = new URL(shareAddress(sharedFolder));
+    url.searchParams.set("file", item.id);
+    tab.location.replace(url);
+    return;
+  }
   tab.sessionStorage.setItem("cloud-drive-token", token);
   const url = new URL("/html-preview", location.origin);
   url.searchParams.set("id", item.id);
@@ -411,10 +422,10 @@ function shareExpired(item) {
 }
 
 function sharingBadge(item) {
-  const hasLink = Boolean(item.share_code || item.has_share);
+  const hasLink = Boolean(item.share_code);
   const directlyShared = hasLink && !shareExpired(item);
   const inherited = !directlyShared && folderPath(item.parent_id).some(
-    (folder) => folder.has_share && !shareExpired(folder)
+    (folder) => folder.share_code && !shareExpired(folder)
   );
   const badge = document.createElement("small");
   badge.className = "sharing-badge";
