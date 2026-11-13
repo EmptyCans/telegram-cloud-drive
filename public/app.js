@@ -190,6 +190,7 @@ async function loadFolderTree() {
       row.dataset.uploadParent = folder.id;
       const open = button("", () => openFolder(folder));
       open.className = "tree-folder";
+      open.title = folder.name;
       open.dataset.folderId = folder.id;
       const name = document.createElement("span");
       name.className = "tree-folder-name";
@@ -204,7 +205,7 @@ async function loadFolderTree() {
         const branch = document.createElement("ul");
         branch.className = "folder-tree";
         branch.append(...renderBranch(folder.id));
-        const toggle = button("▸", () => setBranchExpanded(toggle, branch, folder.id, branch.hidden));
+        const toggle = button("", () => setBranchExpanded(toggle, branch, folder.id, branch.hidden));
         toggle.className = "tree-toggle";
         toggle.setAttribute("aria-label", folder.name + "的子目录");
         setBranchExpanded(toggle, branch, folder.id, expandedFolders.has(folder.id));
