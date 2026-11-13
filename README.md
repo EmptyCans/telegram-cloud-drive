@@ -1,26 +1,33 @@
 # Telegram Cloud Drive
 
-在 Cloudflare Workers 上管理 Telegram 频道里的小文件。一个 Worker 同时托管前端和 API。KV 保存站点设置，D1 保存目录、标签、分享令牌和 Telegram 文件映射。
+基于 Cloudflare Workers 和 Telegram Bot API 的轻量网盘。文件保存在 Telegram 频道，目录、文件索引和分享记录保存在 Cloudflare D1，站点设置保存在 Workers KV。
+
+- 管理端支持目录树、列表和网格、搜索、排序、标签、批量移动和删除。
+- 支持选择、拖放和粘贴上传。文件夹上传保留目录结构，单文件默认上限为 20 MiB，可在站点设置中调低。
+- 文件和目录可以生成同域短链接，支持有效期和撤销。公开目录访客可以浏览、下载、上传和新建文件夹。
+- 浏览器可以预览常见图片、音频、视频，以及 PDF、HTML、Markdown、TXT、DOCX 和 XLSX。媒体能否播放取决于浏览器支持的编码。
 
 ## 从 GitHub 部署
 
-1. 将本目录的文件上传到一个 GitHub 仓库根目录。也可以放在子目录，连接仓库时把根目录设置为对应子目录。
-2. 在 Cloudflare 的 **Workers & Pages** 中创建 **Worker**，选择 **Connect to Git**，授权并选择仓库和生产分支。Worker 名称须和 `wrangler.jsonc` 中的 `name` 一致。若已有同名的其他应用，先改成自己的唯一名称。
-3. 构建命令可以留空，部署命令用 `npx wrangler deploy`。提交到生产分支后，Workers Builds 会自动重新部署。Wrangler 会创建并绑定 `CONFIG`（KV）和 `DB`（D1）。使用自定义部署 API Token 时，为对应账户授予 Worker 部署、KV 和 D1 编辑权限。首次访问文件管理接口会建表。
-4. 在 Worker 的 **Settings → Variables and Secrets** 添加下面三项，类型选 **Secret**。这些是 Worker 运行时的 Secret。
-5. 打开部署生成的 `workers.dev` 地址，用 `ADMIN_TOKEN` 登录。上传一张小图，验证站内预览、下载、分享和撤销链接。
+1. Fork 仓库。在 Cloudflare 的 **Workers & Pages** 中创建 Worker，选择 **Connect to Git**，授权并选择自己的仓库和生产分支。
+2. Worker 名称应和 `wrangler.jsonc` 的 `name` 一致。仓库根目录包含该文件时，项目根目录使用默认值。
+3. 构建命令留空，部署命令使用 `npx wrangler deploy`。Wrangler 会执行配置中的预览构建，并自动创建或复用绑定的 KV（`CONFIG`）和 D1（`DB`）。
+4. 在生产 Worker 的 **Settings → Variables and Secrets** 中添加以下运行时密钥并部署。
+5. 打开生产地址，使用管理员密钥登录。在同一个目录上传小文件并创建分享，用无痕窗口验证浏览、下载和访客上传。
 
-| Secret | 值 |
+| 密钥 | 如何填写 |
 | --- | --- |
-| `ADMIN_TOKEN` | 至少 8 个字符的随机管理员密钥，例如用 `openssl rand -hex 8` 生成 16 个字符 |
+| `ADMIN_TOKEN` | 自行生成的随机管理员密钥，至少 8 个字符 |
 | `TELEGRAM_BOT_TOKEN` | 从 Telegram 的 `@BotFather` 获取 |
-| `TELEGRAM_STORAGE_CHAT_ID` | 数字频道 ID，例如 `-1001234567890`。将 Bot 加入频道并赋予发布消息权限 |
+| `TELEGRAM_STORAGE_CHAT_ID` | Telegram 频道的数字 ID，例如 `-1001234567890`。将 Bot 加入频道并授予发布消息权限 |
 
-[Workers Git 部署](https://developers.cloudflare.com/workers/ci-cd/builds/) · [自动创建 KV 和 D1](https://developers.cloudflare.com/workers/wrangler/configuration/#automatic-provisioning) · [Worker Secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
+Fork 部署使用部署者自己的 D1、KV、Bot 和频道。目录记录和密钥需在自己的部署中配置。
 
-## 本地运行
+[Cloudflare Git 部署](https://developers.cloudflare.com/workers/ci-cd/builds/) · [自动创建 KV 和 D1](https://developers.cloudflare.com/workers/wrangler/configuration/#automatic-provisioning) · [Worker Secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
 
-使用 Node.js 22.12 或更新版本。
+## 本地开发
+
+使用 Node.js 22.12 或更新版本。将 `.dev.vars.example` 复制为 `.dev.vars`，填入测试用密钥。
 
 ```sh
 npm ci
@@ -28,13 +35,12 @@ npm run check
 npm run dev
 ```
 
-先复制 `.dev.vars.example` 为 `.dev.vars` 并填入测试用 Secret。本地 KV 和 D1 由 Wrangler 模拟，状态保存在 `.wrangler/`。上传和下载仍会请求 Telegram，测试时请使用自己的测试频道。部署到 Cloudflare 时使用独立的线上 KV 和 D1。
+本地 D1 和 KV 由 Wrangler 模拟，状态保存在 `.wrangler/`。上传和下载会实际请求 Telegram，请使用测试频道。运行 `npm run deploy -- --dry-run` 可以检查部署构建。
 
-## 使用与数据
+## 技术文档
 
-- 默认只允许管理员浏览和操作。文件可以按需生成公开链接，任何拿到链接的人都能访问，撤销后该地址失效。
-- 站点名称、描述、上传大小限制在管理界面的「设置」中修改，保存在 KV 的 `site:config` 键。不同地区读到更新后的配置可能有延迟。
-- 单文件上限默认 20 MiB，可以调小。这个上限同时考虑了官方 Bot API 的下载能力。站内可预览 JPEG、PNG、GIF、WebP 和 AVIF，其他类型按附件下载。
-- 删除会先在 D1 软删除选中项目（含子目录和文件）并撤销分享链接，再尝试删除 Telegram 原消息。超过 48 小时、Bot 权限不足或请求失败时，界面会提示哪些数量的消息未确认删除，可在 Telegram 手动检查。旧文件缺少原始聊天 ID，只有在确认它确实位于当前配置的存储位置后，才会用当前聊天 ID 同步删除。新文件自动记录上传时的聊天 ID。旧数据库会自动加列。
-- 备份 D1 时还需保留相应频道和 Bot 的访问权限。上传先写频道再写 D1，如果这两步之间发生中断，频道里可能有未被索引的文件消息。
-- 这是参照原项目重新实现的版本，使用独立数据库和 API。当前包含目录、批量及拖拽上传、下载、图片预览、搜索、标签、分享和站点设置。已有的 Prisma 数据库和外链需要另行迁移。原项目的多存储空间、密码解锁、缩略图、复制和统计功能目前未移植。
+见[架构、API、数据模型和运维说明](docs/architecture.md)。
+
+## 许可证
+
+本项目使用 [MIT License](LICENSE)。项目参考了 [AndySkaura/mifun-storage](https://github.com/AndySkaura/mifun-storage) 的 Telegram 频道存储思路，并为 Cloudflare Workers 实现了独立的数据库和接口。
