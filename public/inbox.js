@@ -139,6 +139,27 @@ function renderEntry(item, entries) {
   return row;
 }
 
+function renderBreadcrumbs(data) {
+  const path = $("inbox-path");
+  const current = $("inbox-title").parentElement;
+  const byId = new Map((data.folders ?? []).map(item => [item.id, item]));
+  const ancestors = [];
+  const seen = new Set();
+  for (let id = data.parent; !data.root && byId.has(id) && !seen.has(id); id = byId.get(id).parent_id) {
+    seen.add(id);
+    const item = byId.get(id);
+    const crumb = document.createElement("li");
+    const link = document.createElement("a");
+    link.href = folderAddress(id === data.rootId ? null : id);
+    link.dataset.folderLink = "";
+    link.textContent = item.name;
+    crumb.append(link);
+    ancestors.push(crumb);
+    if (id === data.rootId) break;
+  }
+  path.replaceChildren(...ancestors.reverse(), current);
+}
+
 function renderFolderTree(data) {
   const tree = $("inbox-tree");
   const children = new Map();
@@ -231,6 +252,7 @@ async function loadFolder(target = folder, offsetPage = page, historyMode) {
   maxUploadMiB = data.maxUploadMiB;
   document.title = data.name;
   $("inbox-title").textContent = data.name;
+  renderBreadcrumbs(data);
   if (data.folders) renderFolderTree(data);
   $("inbox-limit").textContent = "单个文件不超过 " + maxUploadMiB + " MiB";
   const up = $("inbox-up");
