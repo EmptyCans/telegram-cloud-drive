@@ -23,6 +23,7 @@ let page = 0;
 let maxUploadMiB;
 let listing = 0;
 let query = "";
+let fileType = "";
 let sort = "name-asc";
 let navigating = false;
 let treeSnapshot;
@@ -267,12 +268,12 @@ function renderFolderTree(data) {
   $("inbox-sidebar").hidden = false;
 }
 
-async function loadFolder(target = folder, offsetPage = page, historyMode, filters = { query, sort }) {
+async function loadFolder(target = folder, offsetPage = page, historyMode, filters = { query, sort, fileType }) {
   const sequence = ++listing;
   let data;
   try {
     const response = await request(folderQuery({
-      offset: offsetPage * pageSize, q: filters.query, sort: filters.sort
+      offset: offsetPage * pageSize, q: filters.query, sort: filters.sort, type: filters.fileType
     }, target));
     data = await response.json();
   } catch (error) {
@@ -281,11 +282,12 @@ async function loadFolder(target = folder, offsetPage = page, historyMode, filte
   }
   if (sequence !== listing) return;
   if (historyMode === "push") history.pushState(null, "", folderAddress(target));
-  if (folder !== target || page !== offsetPage || query !== filters.query || sort !== filters.sort) {
+  if (folder !== target || page !== offsetPage || query !== filters.query || sort !== filters.sort || fileType !== filters.fileType) {
     panel.querySelector(".file-scroll").scrollTop = 0;
   }
-  ({ query, sort } = filters);
+  ({ query, sort, fileType } = filters);
   $("inbox-query").value = query;
+  $("inbox-type").value = fileType;
   $("inbox-sort").value = sort;
   folder = target;
   page = offsetPage;
@@ -300,7 +302,7 @@ async function loadFolder(target = folder, offsetPage = page, historyMode, filte
   grid.replaceChildren(...data.entries.map(item => renderEntry(item, data.entries)));
   stopCovers = observeCovers(grid);
   $("inbox-empty").hidden = data.entries.length > 0;
-  $("inbox-empty").textContent = query ? "没有找到匹配的文件或文件夹。" : "这个文件夹还没有文件。";
+  $("inbox-empty").textContent = query || fileType ? "没有找到匹配的文件或文件夹。" : "这个文件夹还没有文件。";
   $("inbox-pagination").hidden = !page && !data.hasMore;
   $("inbox-previous").disabled = page === 0;
   $("inbox-next").disabled = !data.hasMore;
@@ -308,6 +310,7 @@ async function loadFolder(target = folder, offsetPage = page, historyMode, filte
   form.hidden = false;
   viewSwitch.hidden = false;
   $("inbox-search").hidden = false;
+  $("inbox-list-toolbar").hidden = false;
 }
 
 async function navigateFolder(target, historyMode) {
@@ -316,7 +319,7 @@ async function navigateFolder(target, historyMode) {
   loading.hidden = false;
   const expected = listing + 1;
   try {
-    await loadFolder(target, 0, historyMode, { query: "", sort });
+    await loadFolder(target, 0, historyMode, { query: "", sort, fileType: "" });
   } catch (error) {
     if (historyMode === "pop") history.replaceState(null, "", folderAddress(folder));
     status.textContent = error.message;
@@ -347,6 +350,7 @@ function folderError(error) {
     form.hidden = true;
     viewSwitch.hidden = true;
     $("inbox-search").hidden = true;
+    $("inbox-list-toolbar").hidden = true;
     stopCovers?.();
     $("inbox-entries").replaceChildren();
     $("inbox-empty").hidden = $("inbox-pagination").hidden = true;
@@ -481,7 +485,7 @@ window.addEventListener("drop", (event) => {
 function applyFilters() {
   if (navigating || submit.disabled) return;
   loadFolder(folder, 0, undefined, {
-    query: $("inbox-query").value.trim(), sort: $("inbox-sort").value
+    query: $("inbox-query").value.trim(), sort: $("inbox-sort").value, fileType: $("inbox-type").value
   }).catch(folderError);
 }
 
@@ -493,6 +497,7 @@ $("inbox-query").addEventListener("input", event => {
   if (!event.target.value && query) applyFilters();
 });
 $("inbox-sort").addEventListener("change", applyFilters);
+$("inbox-type").addEventListener("change", applyFilters);
 
 $("inbox-previous").addEventListener("click", () => {
   if (!navigating && !submit.disabled) loadFolder(folder, page - 1).catch(folderError);
