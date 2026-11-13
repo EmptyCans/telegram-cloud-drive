@@ -7,6 +7,7 @@
     "watch_dir": "src"
   },
   "assets": {
+    "binding": "ASSETS",
     "directory": "./public",
     "run_worker_first": [
       "/api/*",

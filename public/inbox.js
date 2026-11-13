@@ -5,13 +5,13 @@ import { entryDateFormat, formatEntryKind, formatEntrySize } from "./entry-forma
 import { bindViewSwitch } from "./view-switch.js";
 
 const $ = (id) => document.getElementById(id);
-const token = location.hash.slice(1);
+const code = location.pathname.match(/^\/s\/([a-zA-Z0-9_-]{12})$/)?.[1];
 const folder = new URLSearchParams(location.search).get("folder");
 const form = $("inbox-form");
 const input = $("inbox-files");
 const submit = $("inbox-submit");
 const status = $("inbox-status");
-const endpoint = "/api/inbox/" + encodeURIComponent(token);
+const endpoint = "/api/inbox/" + code;
 const pageSize = 50;
 let page = 0;
 let maxUploadMiB;
@@ -26,9 +26,8 @@ bindViewSwitch(viewSwitch, "cloud-drive-inbox-view", "grid", (view) => {
 });
 
 function folderAddress(id) {
-  const url = new URL("/inbox", location.origin);
+  const url = new URL(location.pathname, location.origin);
   if (id) url.searchParams.set("folder", id);
-  url.hash = token;
   return url.href;
 }
 
@@ -145,10 +144,8 @@ function renderEntry(item) {
     open.href = folderAddress(item.id);
   } else if (documentPreview || type) {
     if (documentPreview) {
-      const url = new URL("/html-preview", location.origin);
-      url.searchParams.set("id", item.id);
-      if (type === "application/pdf") url.searchParams.set("type", "pdf");
-      url.hash = token;
+      const url = new URL(location.pathname, location.origin);
+      url.searchParams.set("file", item.id);
       open.href = url.href;
       open.target = "_blank";
       open.rel = "noopener noreferrer";
@@ -274,8 +271,8 @@ $("inbox-next").addEventListener("click", () => {
 $("inbox-preview-close").addEventListener("click", () => $("inbox-preview").close());
 $("inbox-preview").addEventListener("close", clearPreview);
 
-if (/^[a-f0-9]{32}$/.test(token)) {
+if (code) {
   loadFolder().then(() => { status.textContent = ""; }).catch(folderError);
 } else {
-  status.textContent = "公开文件夹链接无效。";
+  status.textContent = "公开文件夹链接已失效，请索取新的短链接。";
 }

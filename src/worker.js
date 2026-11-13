@@ -5,11 +5,11 @@ const downloadLimit = 20 * MiB;
 const defaults = { title: "云盘", description: "", maxUploadMiB: 20 };
 const configKey = "site:config";
 const imageTypes = new Set(["image/jpeg", "image/png", "image/gif", "image/webp", "image/avif"]);
-const columns = "id, parent_id, kind, name, mime, size, tags, share_token, share_code, share_expires_at, created_at";
+const columns = "id, parent_id, kind, name, mime, size, tags, share_code, share_expires_at, created_at";
 const activeShare = "(share_expires_at IS NULL OR share_expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))";
 const shareDurations = new Set([3600, 86400, 604800, 2592000]);
 
-function inboxContains(folder, token) {
+function inboxContains(folder, code) {
   return `EXISTS (
     WITH RECURSIVE ancestors(id, parent_id) AS (
       SELECT id, parent_id FROM entries WHERE id = ${folder} AND kind = 'folder' AND deleted_at IS NULL
@@ -17,7 +17,7 @@ function inboxContains(folder, token) {
       SELECT e.id, e.parent_id FROM entries e JOIN ancestors a ON e.id = a.parent_id
       WHERE e.kind = 'folder' AND e.deleted_at IS NULL
     )
-    SELECT 1 FROM ancestors JOIN entries USING (id) WHERE share_token = ${token} AND ${activeShare}
+    SELECT 1 FROM ancestors JOIN entries USING (id) WHERE share_code = ${code} AND ${activeShare}
   )`;
 }
 
@@ -37,10 +37,12 @@ function newShareCode() {
   return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_");
 }
 
-function shareRedirect(path) {
-  return new Response(null, { status: 302, headers: {
-    Location: path, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer"
-  } });
+async function sharePage(env, url, page) {
+  const asset = await env.ASSETS.fetch(new URL(page, url));
+  const headers = new Headers(asset.headers);
+  headers.set("Cache-Control", "no-store");
+  headers.set("Referrer-Policy", "no-referrer");
+  return new Response(asset.body, { status: asset.status, headers });
 }
 
 async function requireAdmin(request, env) {
@@ -106,24 +108,8 @@ async function database(env) {
   const { results: fields } = await db.prepare("PRAGMA table_info(entries)").all();
   if (!fields.length) {
     await db.batch([
-      db.prepare(`CREATE TABLE IF NOT EXISTS entries (
-        id TEXT PRIMARY KEY,
-        parent_id TEXT REFERENCES entries(id),
-        kind TEXT NOT NULL CHECK (kind IN ('folder', 'file')),
-        name TEXT NOT NULL,
-        mime TEXT,
-        size INTEGER,
-        telegram_file_id TEXT,
-        telegram_message_id TEXT,
-        telegram_chat_id TEXT,
-        tags TEXT NOT NULL DEFAULT '[]',
-        share_token TEXT UNIQUE,
-        share_code TEXT,
-        share_expires_at TEXT,
-        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
-        deleted_at TEXT
-      )`),
-      db.prepare("CREATE INDEX IF NOT EXISTS entries_parent_active ON entries(parent_id, kind, created_at DESC, id) WHERE deleted_at IS NULL")
+      db.prepare(entriesTable("entries")),
+      ...entryIndexes(db)
     ]);
   } else {
     for (const column of ["telegram_chat_id", "share_expires_at", "share_code"]) {
@@ -134,9 +120,60 @@ async function database(env) {
         if (!error.message.includes("duplicate column name: " + column)) throw error;
       }
     }
+    if (fields.some(({ name }) => name === "share_token")) await migrateShareCodes(db);
   }
-  await db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS entries_share_code ON entries(share_code) WHERE share_code IS NOT NULL").run();
   return db;
+}
+
+function entriesTable(table) {
+  return `CREATE TABLE IF NOT EXISTS ${table} (
+        id TEXT PRIMARY KEY,
+        parent_id TEXT REFERENCES ${table}(id),
+        kind TEXT NOT NULL CHECK (kind IN ('folder', 'file')),
+        name TEXT NOT NULL,
+        mime TEXT,
+        size INTEGER,
+        telegram_file_id TEXT,
+        telegram_message_id TEXT,
+        telegram_chat_id TEXT,
+        tags TEXT NOT NULL DEFAULT '[]',
+        share_code TEXT,
+        share_expires_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        deleted_at TEXT
+      )`;
+}
+
+function entryIndexes(db) {
+  return [
+    db.prepare("CREATE INDEX IF NOT EXISTS entries_parent_active ON entries(parent_id, kind, created_at DESC, id) WHERE deleted_at IS NULL"),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS entries_share_code ON entries(share_code) WHERE share_code IS NOT NULL")
+  ];
+}
+
+async function migrateShareCodes(db) {
+  // SQLite requires rebuilding the table to remove a column with an inline UNIQUE constraint.
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+  const randomCode = Array(12).fill(`substr('${alphabet}', (random() & 63) + 1, 1)`).join(" || ");
+  const savedColumns = columns + ", telegram_file_id, telegram_message_id, telegram_chat_id, deleted_at";
+  const migratedColumns = savedColumns.replace("share_code,", `CASE
+    WHEN share_code IS NOT NULL THEN share_code
+    WHEN share_token IS NOT NULL AND deleted_at IS NULL AND ${activeShare} THEN ${randomCode}
+    ELSE NULL END,`);
+  try {
+    await db.batch([
+      db.prepare("PRAGMA defer_foreign_keys = ON"),
+      db.prepare(entriesTable("entries_short_links")),
+      db.prepare(`INSERT INTO entries_short_links (${savedColumns}) SELECT ${migratedColumns} FROM entries`),
+      db.prepare("DROP TABLE entries"),
+      db.prepare("ALTER TABLE entries_short_links RENAME TO entries"),
+      ...entryIndexes(db)
+    ]);
+  } catch (error) {
+    const { results } = await db.prepare("PRAGMA table_info(entries)").all();
+    if (!results.some(({ name }) => name === "share_code") ||
+        results.some(({ name }) => name === "share_token")) throw error;
+  }
 }
 
 const entrySort = new Map([
@@ -189,7 +226,7 @@ async function list(db, url) {
   });
 }
 
-async function createEntry(db, { parent, kind, name, mime = null, size = null, fileId = null, messageId = null, chatId = null, inboxToken = null }) {
+async function createEntry(db, { parent, kind, name, mime = null, size = null, fileId = null, messageId = null, chatId = null, inboxCode = null }) {
   const id = crypto.randomUUID();
   const result = await db.prepare(`INSERT INTO entries
     (id, parent_id, kind, name, mime, size, telegram_file_id, telegram_message_id, telegram_chat_id)
@@ -198,8 +235,8 @@ async function createEntry(db, { parent, kind, name, mime = null, size = null, f
       SELECT 1 FROM entries WHERE id = ?2 AND kind = 'folder' AND deleted_at IS NULL
       AND (?10 IS NULL OR ${inboxContains("?2", "?10")})
     )`)
-    .bind(id, parent, kind, name, mime, size, fileId, messageId, chatId, inboxToken).run();
-  if (!result.meta.changes) throw new HttpError(404, inboxToken ? "收件链接已失效" : "目录已不存在");
+    .bind(id, parent, kind, name, mime, size, fileId, messageId, chatId, inboxCode).run();
+  if (!result.meta.changes) throw new HttpError(404, inboxCode ? "收件链接已失效" : "目录已不存在");
   return json({ id }, 201);
 }
 
@@ -271,7 +308,7 @@ async function upload(request, db, env, url, inbox = null) {
   try {
     return await createEntry(db, {
       parent, kind: "file", name, mime, size, fileId: message.document.file_id,
-      messageId, chatId, inboxToken: inbox?.token
+      messageId, chatId, inboxCode: inbox?.code
     });
   } catch (error) {
     if (error instanceof HttpError && error.status === 404) {
@@ -281,22 +318,16 @@ async function upload(request, db, env, url, inbox = null) {
   }
 }
 
-async function content(db, env, column, id, preview, inboxToken = null) {
-  const expiry = column === "share_token" ? `AND ${activeShare}` : "";
-  const scope = inboxToken ? `AND ${inboxContains("item.parent_id", "?2")}` : "";
+async function content(db, env, column, id, preview, inboxCode = null) {
+  const expiry = column === "share_code" ? `AND ${activeShare}` : "";
+  const scope = inboxCode ? `AND ${inboxContains("item.parent_id", "?2")}` : "";
   const item = await db.prepare(
     `SELECT name, mime, size, telegram_file_id FROM entries AS item
      WHERE ${column} = ?1 AND kind = 'file' AND deleted_at IS NULL ${expiry} ${scope}`
-  ).bind(...(inboxToken ? [id, inboxToken] : [id])).first();
+  ).bind(...(inboxCode ? [id, inboxCode] : [id])).first();
   if (!item) throw new HttpError(404, "文件不存在或链接已失效");
   if (item.size > downloadLimit) throw new HttpError(413, "文件超过下载大小限制");
   const type = preview ? previewType(item) : undefined;
-  if (column === "share_token" && type && !imageTypes.has(type)) {
-    return new Response(null, {
-      status: 302,
-      headers: { Location: "/html-preview#file=" + id, "Cache-Control": "no-store" }
-    });
-  }
   const token = telegramToken(env);
   const file = await telegram(env, "getFile", new URLSearchParams({ file_id: item.telegram_file_id }));
   if (typeof file.file_path !== "string" || !/^[\w./-]+$/.test(file.file_path) || file.file_path.split("/").includes("..")) {
@@ -311,6 +342,7 @@ async function content(db, env, column, id, preview, inboxToken = null) {
   return new Response(upstream.body, {
     headers: {
       "Content-Type": inlineType || "application/octet-stream",
+      "X-File-Mime": imageTypes.has(item.mime) ? item.mime : "application/octet-stream",
       "Content-Disposition": `${inlineType ? "inline" : "attachment"}; filename*=UTF-8''${encodedName}`,
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
@@ -349,11 +381,10 @@ async function updateEntry(db, id, body) {
     if (duration != null && !shareDurations.has(duration)) throw new HttpError(400, "无效的链接有效期");
     const expires = duration ? new Date(Date.now() + duration * 1000).toISOString() : null;
     const item = await db.prepare(`UPDATE entries
-      SET share_token = CASE WHEN ?1 THEN coalesce(share_token, ?2) ELSE NULL END,
-          share_code = CASE WHEN ?1 THEN coalesce(share_code, ?6) ELSE NULL END,
+      SET share_code = CASE WHEN ?1 THEN coalesce(share_code, ?2) ELSE NULL END,
           share_expires_at = CASE WHEN NOT ?1 THEN NULL WHEN ?3 THEN ?4 ELSE share_expires_at END
-      WHERE id = ?5 AND deleted_at IS NULL RETURNING share_token, share_code, share_expires_at`)
-      .bind(Number(body.share), crypto.randomUUID().replaceAll("-", ""), Number(duration !== undefined), expires, id, newShareCode()).first();
+      WHERE id = ?5 AND deleted_at IS NULL RETURNING share_code, share_expires_at`)
+      .bind(Number(body.share), newShareCode(), Number(duration !== undefined), expires, id).first();
     if (!item) throw new HttpError(404, "项目不存在");
     return json(item);
   }
@@ -384,7 +415,7 @@ async function removeEntry(db, id, env, legacyMode) {
   const legacy = `SELECT 1 FROM entries JOIN descendants USING (id)
     WHERE kind = 'file' AND telegram_chat_id IS NULL AND telegram_message_id IS NOT NULL`;
   const { results } = await db.prepare(`${tree}
-    UPDATE entries SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), share_token = NULL, share_code = NULL, share_expires_at = NULL
+    UPDATE entries SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), share_code = NULL, share_expires_at = NULL
     WHERE id IN (SELECT id FROM descendants)
       AND (? OR NOT EXISTS (${legacy}))
     RETURNING kind, telegram_chat_id, telegram_message_id, created_at`)
@@ -428,23 +459,27 @@ async function removeEntry(db, id, env, legacyMode) {
   return json({ removed: results.length, originalConfirmed: confirmed, originalUnconfirmed: files.length - confirmed });
 }
 
-async function publicFolder(request, db, env, url, token) {
-  const root = await db.prepare(`SELECT id, name FROM entries
-    WHERE share_token = ? AND kind = 'folder' AND deleted_at IS NULL AND ${activeShare}`).bind(token).first();
-  if (!root) throw new HttpError(404, "公开文件夹链接已失效");
+async function publicFolder(request, db, env, url, code, root) {
   const id = url.searchParams.get("folder") || root.id;
   const folder = id === root.id ? root : await db.prepare(`SELECT id, name, parent_id FROM entries
-    WHERE id = ?1 AND ${inboxContains("?1", "?2")}`).bind(id, token).first();
+    WHERE id = ?1 AND ${inboxContains("?1", "?2")}`).bind(id, code).first();
   if (!folder) throw new HttpError(404, "文件夹不存在或已移出公开范围");
-  if (request.method === "POST") return upload(request, db, env, url, { id, token });
+  if (request.method === "POST") return upload(request, db, env, url, { id, code });
 
   const offset = Math.max(0, Math.min(1000000, Number.parseInt(url.searchParams.get("offset"), 10) || 0));
   const { results } = await db.prepare(`SELECT id, kind, name, mime, size, created_at FROM entries
     WHERE parent_id = ?1 AND deleted_at IS NULL AND ${inboxContains("?1", "?2")}
-    ORDER BY kind DESC, name COLLATE NOCASE, id LIMIT 51 OFFSET ?3`).bind(id, token, offset).all();
+    ORDER BY kind DESC, name COLLATE NOCASE, id LIMIT 51 OFFSET ?3`).bind(id, code, offset).all();
   const { maxUploadMiB } = await getConfig(env);
   return json({ name: folder.name, parent: folder.parent_id ?? null, root: id === root.id,
     entries: results.slice(0, 50), hasMore: results.length > 50, maxUploadMiB });
+}
+
+async function activeShortShare(db, code) {
+  const item = await db.prepare(`SELECT id, kind, name, mime FROM entries
+    WHERE share_code = ? AND deleted_at IS NULL AND ${activeShare}`).bind(code).first();
+  if (!item) throw new HttpError(404, "分享链接已失效");
+  return item;
 }
 
 async function handle(request, env) {
@@ -454,24 +489,44 @@ async function handle(request, env) {
   if (pathname === "/api/config" && method === "GET") return json(await getConfig(env));
   if (pathname === "/api/health" && method === "GET") return json({ status: "ok" });
   const shortShare = pathname.match(/^\/s\/([a-zA-Z0-9_-]{12})$/);
-  if (shortShare && (method === "GET" || method === "HEAD")) {
+  if (shortShare && method === "GET") {
     const db = await database(env);
-    const item = await db.prepare(`SELECT kind, name, mime, share_token FROM entries
-      WHERE share_code = ? AND share_token IS NOT NULL AND deleted_at IS NULL AND ${activeShare}`)
-      .bind(shortShare[1]).first();
-    if (!item) throw new HttpError(404, "分享链接已失效");
-    if (item.kind === "folder") return shareRedirect("/inbox#" + item.share_token);
-    return shareRedirect("/f/" + item.share_token + (previewType(item) ? "/preview" : ""));
+    const item = await activeShortShare(db, shortShare[1]);
+    const file = url.searchParams.get("file");
+    if (item.kind === "folder") {
+      if (!file) return sharePage(env, url, "/inbox");
+      if (!/^[a-f0-9-]{36}$/.test(file)) throw new HttpError(404, "文件不存在");
+      const entry = await db.prepare(`SELECT name, mime FROM entries AS item
+        WHERE id = ?1 AND kind = 'file' AND deleted_at IS NULL AND ${inboxContains("item.parent_id", "?2")}`)
+        .bind(file, shortShare[1]).first();
+      if (!entry) throw new HttpError(404, "文件不存在");
+      if (previewType(entry)) return sharePage(env, url, "/html-preview");
+      return content(db, env, "id", file, false, shortShare[1]);
+    }
+    if (file) throw new HttpError(404, "文件不存在");
+    if (previewType(item)) return sharePage(env, url, "/html-preview");
+    return content(db, env, "share_code", shortShare[1], false);
   }
-  const shared = pathname.match(/^\/f\/([a-f0-9]{32})(\/preview)?$/);
-  if (shared && method === "GET") return content(await database(env), env, "share_token", shared[1], !!shared[2]);
-  const inboxFile = pathname.match(/^\/api\/inbox\/([a-f0-9]{32})\/([a-f0-9-]{36})\/download$/);
+  const sharedFile = pathname.match(/^\/api\/share\/([a-zA-Z0-9_-]{12})\/download$/);
+  if (sharedFile && method === "GET") {
+    return content(await database(env), env, "share_code", sharedFile[1], false);
+  }
+  const inboxFile = pathname.match(/^\/api\/inbox\/([a-zA-Z0-9_-]{12})\/([a-f0-9-]{36})\/download$/);
   if (inboxFile && method === "GET") {
-    return content(await database(env), env, "id", inboxFile[2], false, inboxFile[1]);
+    const db = await database(env);
+    const item = await activeShortShare(db, inboxFile[1]);
+    if (item.kind !== "folder") throw new HttpError(404, "分享链接已失效");
+    return content(db, env, "id", inboxFile[2], false, inboxFile[1]);
   }
-  const inbox = pathname.match(/^\/api\/inbox\/([a-f0-9]{32})$/);
+  const inbox = pathname.match(/^\/api\/inbox\/([a-zA-Z0-9_-]{12})$/);
   if (inbox && (method === "GET" || method === "POST")) {
-    return publicFolder(request, await database(env), env, url, inbox[1]);
+    const db = await database(env);
+    const item = await activeShortShare(db, inbox[1]);
+    if (item.kind !== "folder") throw new HttpError(404, "分享链接已失效");
+    return publicFolder(request, db, env, url, inbox[1], item);
+  }
+  if (pathname.startsWith("/f/") || pathname.startsWith("/api/inbox/")) {
+    throw new HttpError(404, "分享链接已失效，请索取新的短链接");
   }
   if (!pathname.startsWith("/api/")) throw new HttpError(404, "地址不存在");
   await requireAdmin(request, env);
@@ -489,15 +544,15 @@ async function handle(request, env) {
   const db = await database(env);
   if (pathname === "/api/links" && method === "GET") {
     const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset"), 10) || 0);
-    const { results } = await db.prepare(`SELECT id, parent_id, name, kind, mime, share_token, share_code, share_expires_at
-      FROM entries WHERE share_token IS NOT NULL AND deleted_at IS NULL
+    const { results } = await db.prepare(`SELECT id, parent_id, name, kind, mime, share_code, share_expires_at
+      FROM entries WHERE share_code IS NOT NULL AND deleted_at IS NULL
       ORDER BY name COLLATE NOCASE, id LIMIT 51 OFFSET ?`).bind(offset).all();
     return json({ links: results.slice(0, 50), hasMore: results.length > 50 });
   }
   if (pathname === "/api/entries" && method === "GET") return list(db, url);
   if (pathname === "/api/folders" && method === "GET") {
     const { results } = await db.prepare(`SELECT id, parent_id, name,
-      share_token IS NOT NULL AS has_share, share_expires_at FROM entries
+      share_code, share_expires_at FROM entries
       WHERE kind = 'folder' AND deleted_at IS NULL ORDER BY name COLLATE NOCASE, id`).all();
     return json({ folders: results });
   }
@@ -508,18 +563,6 @@ async function handle(request, env) {
     return createEntry(db, { parent, kind: "folder", name: validName(body?.name) });
   }
   if (pathname === "/api/upload" && method === "POST") return upload(request, db, env, url);
-  const shortLink = pathname.match(/^\/api\/entries\/([a-f0-9-]{36})\/short-link$/);
-  if (shortLink && method === "POST") {
-    const { token } = await bodyJson(request) ?? {};
-    if (typeof token !== "string" || !/^[a-f0-9]{32}$/.test(token)) {
-      throw new HttpError(400, "分享链接无效");
-    }
-    const item = await db.prepare(`UPDATE entries SET share_code = coalesce(share_code, ?1)
-      WHERE id = ?2 AND share_token = ?3 AND deleted_at IS NULL AND ${activeShare} RETURNING share_code`)
-      .bind(newShareCode(), shortLink[1], token).first();
-    if (!item) throw new HttpError(404, "分享链接已失效");
-    return json(item);
-  }
   const entry = pathname.match(/^\/api\/entries\/([a-f0-9-]{36})(\/(?:preview|download))?$/);
   if (entry) {
     if (entry[2] && method === "GET") return content(db, env, "id", entry[1], entry[2] === "/preview");

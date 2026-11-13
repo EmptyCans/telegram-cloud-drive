@@ -16,18 +16,17 @@ function downloadFallback(message, url, name) {
 async function loadPreview() {
   const params = new URLSearchParams(location.search);
   const id = params.get("id");
-  const fragment = location.hash.slice(1);
-  const fileShare = fragment.startsWith("file=") ? fragment.slice(5) : null;
-  const share = fileShare === null ? fragment : "";
-  if (fileShare === null && !/^[a-f0-9-]{36}$/.test(id ?? "")) throw new Error("文件地址无效。");
-  if (fileShare !== null && !/^[a-f0-9]{32}$/.test(fileShare)) throw new Error("文件分享链接无效。");
-  if (share && !/^[a-f0-9]{32}$/.test(share)) throw new Error("公开文件夹链接无效。");
-  const publicAccess = Boolean(share || fileShare);
+  const code = location.pathname.match(/^\/s\/([a-zA-Z0-9_-]{12})$/)?.[1];
+  const file = params.get("file");
+  if (!code && location.hash) throw new Error("分享链接已失效，请索取新的短链接。");
+  if (!code && !/^[a-f0-9-]{36}$/.test(id ?? "")) throw new Error("文件地址无效。");
+  const publicAccess = Boolean(code);
   const token = publicAccess ? null : sessionStorage.getItem("cloud-drive-token");
   if (!publicAccess && !token) throw new Error("请登录云盘后重新打开该文件。");
 
-  const path = fileShare ? "/f/" + fileShare
-    : share ? "/api/inbox/" + share + "/" + id + "/download" : "/api/entries/" + id + "/download";
+  const path = code
+    ? file ? "/api/inbox/" + code + "/" + encodeURIComponent(file) + "/download" : "/api/share/" + code + "/download"
+    : "/api/entries/" + id + "/download";
   const options = publicAccess ? { credentials: "omit" } : { headers: { Authorization: "Bearer " + token } };
   const response = await fetch(path, options);
   if (!response.ok) {
@@ -37,8 +36,8 @@ async function loadPreview() {
   const filename = response.headers.get("Content-Disposition")?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
   const name = filename ? decodeURIComponent(filename) : "文件";
   document.title = name;
-  const detected = previewType({ name });
-  const type = fileShare ? detected
+  const detected = previewType({ name, mime: response.headers.get("X-File-Mime") });
+  const type = code ? detected
     : isDocumentPreview(detected) ? detected
       : params.get("type") === "pdf" ? "application/pdf" : "text/html";
   if (!type) {
@@ -49,7 +48,7 @@ async function loadPreview() {
   const blob = await response.blob();
   if (isWorkbookPreview(type)) {
     try {
-      const { renderWorkbook } = await import("./document-renderers.js");
+      const { renderWorkbook } = await import("/document-renderers.js");
       document.body.append(await renderWorkbook(blob));
       status.hidden = true;
     } catch {
@@ -59,7 +58,7 @@ async function loadPreview() {
   }
   if (isRenderedDocument(type)) {
     try {
-      const { renderDocument } = await import("./document-renderers.js");
+      const { renderDocument } = await import("/document-renderers.js");
       const sandbox = "allow-popups allow-popups-to-escape-sandbox";
       frame.setAttribute("sandbox", type === "text/markdown" ? sandbox : sandbox + " allow-scripts");
       frame.classList.add("rendered-document");
