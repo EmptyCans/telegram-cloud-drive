@@ -435,22 +435,19 @@ function shareStatus(item) {
   return (shareExpired(item) ? "已过期 · " : "到期时间 · ") + entryDateFormat.format(new Date(item.share_expires_at));
 }
 
-function shareAddress(item) {
-  if (item.share_code) return location.origin + "/s/" + item.share_code;
-  const suffix = previewType(item) ? "/preview" : "";
-  const path = item.kind === "folder" ? "/inbox#" + item.share_token : "/f/" + item.share_token + suffix;
-  return location.origin + path;
-}
-
-async function copyShare(item) {
-  if (shareExpired(item)) return editShare(item);
+async function shareAddress(item) {
   if (!item.share_code) {
     const { share_code } = await api(itemPath(item) + "/short-link", {
       method: "POST", json: { token: item.share_token }
     });
     item.share_code = share_code;
   }
-  const link = shareAddress(item);
+  return location.origin + "/s/" + item.share_code;
+}
+
+async function copyShare(item) {
+  if (shareExpired(item)) return editShare(item);
+  const link = await shareAddress(item);
   try {
     await navigator.clipboard.writeText(link);
     notice("已复制公开链接");
@@ -508,11 +505,17 @@ async function refreshLinks() {
     const actions = document.createElement("div");
     actions.className = "row links-actions";
     if (!shareExpired(item)) {
-      const open = document.createElement("a");
-      open.href = shareAddress(item);
-      open.target = "_blank";
-      open.rel = "noopener noreferrer";
-      open.textContent = "打开分享";
+      const open = button("打开分享", async () => {
+        const tab = window.open("about:blank", "_blank");
+        if (!tab) throw new Error("浏览器拦截了新标签页，请允许弹出窗口后重试。");
+        tab.opener = null;
+        try {
+          tab.location.replace(await shareAddress(item));
+        } catch (error) {
+          tab.close();
+          throw error;
+        }
+      });
       actions.append(open, button("复制链接", () => copyShare(item)));
     }
     actions.append(button("修改有效期", () => editShare(item)), button("撤销", () => revokeShare(item)));

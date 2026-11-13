@@ -37,10 +37,12 @@ function newShareCode() {
   return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_");
 }
 
-function shareRedirect(path) {
-  return new Response(null, { status: 302, headers: {
-    Location: path, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer"
-  } });
+async function sharePage(env, url, page) {
+  const asset = await env.ASSETS.fetch(new URL(page, url));
+  const headers = new Headers(asset.headers);
+  headers.set("Cache-Control", "no-store");
+  headers.set("Referrer-Policy", "no-referrer");
+  return new Response(asset.body, { status: asset.status, headers });
 }
 
 async function requireAdmin(request, env) {
@@ -282,7 +284,7 @@ async function upload(request, db, env, url, inbox = null) {
 }
 
 async function content(db, env, column, id, preview, inboxToken = null) {
-  const expiry = column === "share_token" ? `AND ${activeShare}` : "";
+  const expiry = column === "share_code" ? `AND share_token IS NOT NULL AND ${activeShare}` : "";
   const scope = inboxToken ? `AND ${inboxContains("item.parent_id", "?2")}` : "";
   const item = await db.prepare(
     `SELECT name, mime, size, telegram_file_id FROM entries AS item
@@ -291,12 +293,6 @@ async function content(db, env, column, id, preview, inboxToken = null) {
   if (!item) throw new HttpError(404, "文件不存在或链接已失效");
   if (item.size > downloadLimit) throw new HttpError(413, "文件超过下载大小限制");
   const type = preview ? previewType(item) : undefined;
-  if (column === "share_token" && type && !imageTypes.has(type)) {
-    return new Response(null, {
-      status: 302,
-      headers: { Location: "/html-preview#file=" + id, "Cache-Control": "no-store" }
-    });
-  }
   const token = telegramToken(env);
   const file = await telegram(env, "getFile", new URLSearchParams({ file_id: item.telegram_file_id }));
   if (typeof file.file_path !== "string" || !/^[\w./-]+$/.test(file.file_path) || file.file_path.split("/").includes("..")) {
@@ -311,6 +307,7 @@ async function content(db, env, column, id, preview, inboxToken = null) {
   return new Response(upstream.body, {
     headers: {
       "Content-Type": inlineType || "application/octet-stream",
+      "X-File-Mime": imageTypes.has(item.mime) ? item.mime : "application/octet-stream",
       "Content-Disposition": `${inlineType ? "inline" : "attachment"}; filename*=UTF-8''${encodedName}`,
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
@@ -447,6 +444,13 @@ async function publicFolder(request, db, env, url, token) {
     entries: results.slice(0, 50), hasMore: results.length > 50, maxUploadMiB });
 }
 
+async function activeShortShare(db, code) {
+  const item = await db.prepare(`SELECT kind, name, mime, share_token FROM entries
+    WHERE share_code = ? AND share_token IS NOT NULL AND deleted_at IS NULL AND ${activeShare}`).bind(code).first();
+  if (!item) throw new HttpError(404, "分享链接已失效");
+  return item;
+}
+
 async function handle(request, env) {
   const url = new URL(request.url);
   const { pathname } = url;
@@ -454,24 +458,44 @@ async function handle(request, env) {
   if (pathname === "/api/config" && method === "GET") return json(await getConfig(env));
   if (pathname === "/api/health" && method === "GET") return json({ status: "ok" });
   const shortShare = pathname.match(/^\/s\/([a-zA-Z0-9_-]{12})$/);
-  if (shortShare && (method === "GET" || method === "HEAD")) {
+  if (shortShare && method === "GET") {
     const db = await database(env);
-    const item = await db.prepare(`SELECT kind, name, mime, share_token FROM entries
-      WHERE share_code = ? AND share_token IS NOT NULL AND deleted_at IS NULL AND ${activeShare}`)
-      .bind(shortShare[1]).first();
-    if (!item) throw new HttpError(404, "分享链接已失效");
-    if (item.kind === "folder") return shareRedirect("/inbox#" + item.share_token);
-    return shareRedirect("/f/" + item.share_token + (previewType(item) ? "/preview" : ""));
+    const item = await activeShortShare(db, shortShare[1]);
+    const file = url.searchParams.get("file");
+    if (item.kind === "folder") {
+      if (!file) return sharePage(env, url, "/inbox");
+      if (!/^[a-f0-9-]{36}$/.test(file)) throw new HttpError(404, "文件不存在");
+      const entry = await db.prepare(`SELECT name, mime FROM entries AS item
+        WHERE id = ?1 AND kind = 'file' AND deleted_at IS NULL AND ${inboxContains("item.parent_id", "?2")}`)
+        .bind(file, item.share_token).first();
+      if (!entry) throw new HttpError(404, "文件不存在");
+      if (previewType(entry)) return sharePage(env, url, "/html-preview");
+      return content(db, env, "id", file, false, item.share_token);
+    }
+    if (file) throw new HttpError(404, "文件不存在");
+    if (previewType(item)) return sharePage(env, url, "/html-preview");
+    return content(db, env, "share_code", shortShare[1], false);
   }
-  const shared = pathname.match(/^\/f\/([a-f0-9]{32})(\/preview)?$/);
-  if (shared && method === "GET") return content(await database(env), env, "share_token", shared[1], !!shared[2]);
-  const inboxFile = pathname.match(/^\/api\/inbox\/([a-f0-9]{32})\/([a-f0-9-]{36})\/download$/);
+  const sharedFile = pathname.match(/^\/api\/share\/([a-zA-Z0-9_-]{12})\/download$/);
+  if (sharedFile && method === "GET") {
+    return content(await database(env), env, "share_code", sharedFile[1], false);
+  }
+  const inboxFile = pathname.match(/^\/api\/inbox\/([a-zA-Z0-9_-]{12})\/([a-f0-9-]{36})\/download$/);
   if (inboxFile && method === "GET") {
-    return content(await database(env), env, "id", inboxFile[2], false, inboxFile[1]);
+    const db = await database(env);
+    const item = await activeShortShare(db, inboxFile[1]);
+    if (item.kind !== "folder") throw new HttpError(404, "分享链接已失效");
+    return content(db, env, "id", inboxFile[2], false, item.share_token);
   }
-  const inbox = pathname.match(/^\/api\/inbox\/([a-f0-9]{32})$/);
+  const inbox = pathname.match(/^\/api\/inbox\/([a-zA-Z0-9_-]{12})$/);
   if (inbox && (method === "GET" || method === "POST")) {
-    return publicFolder(request, await database(env), env, url, inbox[1]);
+    const db = await database(env);
+    const item = await activeShortShare(db, inbox[1]);
+    if (item.kind !== "folder") throw new HttpError(404, "分享链接已失效");
+    return publicFolder(request, db, env, url, item.share_token);
+  }
+  if (pathname.startsWith("/f/") || pathname.startsWith("/api/inbox/")) {
+    throw new HttpError(404, "分享链接已失效，请索取新的短链接");
   }
   if (!pathname.startsWith("/api/")) throw new HttpError(404, "地址不存在");
   await requireAdmin(request, env);
