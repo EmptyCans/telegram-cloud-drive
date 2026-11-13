@@ -24,7 +24,6 @@ let maxUploadMiB;
 let listing = 0;
 let navigating = false;
 let treeSnapshot;
-let knownFolders;
 
 let stopCovers;
 
@@ -270,15 +269,8 @@ async function loadFolder(target = folder, offsetPage = page, historyMode) {
   const sequence = ++listing;
   let data;
   try {
-    const fields = { offset: offsetPage * pageSize };
-    if ((historyMode || offsetPage !== page) && knownFolders) fields.tree = "0";
-    data = await (await request(folderQuery(fields, target))).json();
-    if (sequence !== listing) return;
-    if (fields.tree === "0" && !data.folders && !data.root &&
-        !knownFolders.some(item => item.id === target && item.parent_id === data.parent && item.name === data.name)) {
-      delete fields.tree;
-      data = await (await request(folderQuery(fields, target))).json();
-    }
+    const response = await request(folderQuery({ offset: offsetPage * pageSize }, target));
+    data = await response.json();
   } catch (error) {
     if (sequence !== listing) return;
     throw error;
@@ -288,13 +280,11 @@ async function loadFolder(target = folder, offsetPage = page, historyMode) {
   if (folder !== target || page !== offsetPage) panel.querySelector(".file-scroll").scrollTop = 0;
   folder = target;
   page = offsetPage;
-  maxUploadMiB = data.maxUploadMiB ?? maxUploadMiB;
-  if (data.folders) knownFolders = data.folders;
+  maxUploadMiB = data.maxUploadMiB;
   document.title = data.name;
   $("inbox-title").textContent = data.name;
-  const navigation = { ...data, folders: knownFolders };
-  renderBreadcrumbs(navigation);
-  if (knownFolders) renderFolderTree(navigation);
+  renderBreadcrumbs(data);
+  if (data.folders) renderFolderTree(data);
   $("inbox-limit").textContent = "单个文件不超过 " + maxUploadMiB + " MiB";
   const grid = $("inbox-entries");
   stopCovers?.();
@@ -312,17 +302,14 @@ async function loadFolder(target = folder, offsetPage = page, historyMode) {
 async function navigateFolder(target, historyMode) {
   navigating = true;
   const loading = $("inbox-folder-loading");
+  loading.hidden = false;
   const expected = listing + 1;
-  const timer = setTimeout(() => {
-    if (expected === listing) loading.hidden = false;
-  }, 150);
   try {
     await loadFolder(target, 0, historyMode);
   } catch (error) {
     if (historyMode === "pop") history.replaceState(null, "", folderAddress(folder));
     status.textContent = error.message;
   } finally {
-    clearTimeout(timer);
     if (expected === listing) {
       navigating = false;
       loading.hidden = true;
