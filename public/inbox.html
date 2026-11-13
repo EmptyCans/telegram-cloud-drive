@@ -12,7 +12,7 @@
 </head>
 <body>
   <main>
-    <section class="inbox-panel" aria-labelledby="inbox-title">
+    <section id="inbox-panel" class="inbox-panel" aria-labelledby="inbox-title" hidden>
       <div class="toolbar">
         <h1 id="inbox-title">公开文件夹</h1>
         <div class="row">
@@ -31,7 +31,7 @@
         <input id="inbox-files" type="file" multiple hidden>
         <button id="inbox-submit" class="primary" type="button">上传文件</button>
       </form>
-      <p id="inbox-status" role="status">正在加载文件夹…</p>
+      <p id="inbox-status" role="status"></p>
       <div class="inbox-list-heading" aria-hidden="true">
         <span>名称</span><span>创建时间</span><span>类型</span><span>大小</span><span>操作</span>
       </div>

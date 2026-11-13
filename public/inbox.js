@@ -8,6 +8,7 @@ const $ = (id) => document.getElementById(id);
 const code = location.pathname.match(/^\/s\/([a-zA-Z0-9_-]{12})$/)?.[1];
 const folder = new URLSearchParams(location.search).get("folder");
 const form = $("inbox-form");
+const panel = $("inbox-panel");
 const input = $("inbox-files");
 const submit = $("inbox-submit");
 const status = $("inbox-status");
@@ -272,7 +273,8 @@ $("inbox-preview-close").addEventListener("click", () => $("inbox-preview").clos
 $("inbox-preview").addEventListener("close", clearPreview);
 
 if (code) {
-  loadFolder().then(() => { status.textContent = ""; }).catch(folderError);
+  loadFolder().catch(folderError).finally(() => { panel.hidden = false; });
 } else {
   status.textContent = "公开文件夹链接已失效，请索取新的短链接。";
+  panel.hidden = false;
 }
