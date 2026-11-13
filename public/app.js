@@ -1,7 +1,7 @@
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
-import { entryDateFormat, formatEntryKind, formatEntrySize } from "./entry-format.js";
+import { entryDateFormat, entryExtension, formatEntryKind, formatEntrySize } from "./entry-format.js";
 import { bindViewSwitch } from "./view-switch.js";
 
 const $ = (id) => document.getElementById(id);
@@ -641,6 +641,13 @@ function renderItem(item) {
   menu.className = "action-panel";
   details.append(summary, menu);
   if (!folder) {
+    const extension = entryExtension(item.name);
+    if (extension) {
+      const badge = document.createElement("span");
+      badge.className = "entry-extension";
+      badge.textContent = badge.title = "." + extension.toLowerCase();
+      actions.append(badge);
+    }
     actions.append(button("下载", () => download(item)));
     if (openPreview) menu.append(button("预览", openPreview));
   }
