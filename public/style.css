@@ -125,9 +125,13 @@ input::placeholder { color: var(--placeholder); }
 .sidebar h2 { padding: 4px 6px 8px; font-size: 14px; }
 #manager > .sidebar { display: flex; flex-direction: column; overflow: hidden; }
 #manager .directory-scroll { min-height: 0; overflow: auto; }
-#account-actions { justify-content: center; flex: none; gap: 6px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
-#account-actions button { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; color: var(--muted); }
+#account-actions { justify-content: center; flex: none; gap: 4px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+#account-actions button { display: grid; place-items: center; width: 32px; height: 36px; padding: 0; color: var(--muted); }
 #account-actions button:hover { color: var(--text); }
+.icon-help { display: grid; place-items: center; width: 16px; height: 16px; border: 1px solid currentColor; border-radius: 50%; font-size: 11px; line-height: 1; }
+.help-topics { display: grid; gap: 6px; margin: 18px 0 0; }
+.help-topics dt { font-weight: 650; }
+.help-topics dd { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
 .icon-link::before, .icon-link::after { content: ""; position: absolute; width: 10px; height: 6px; border: 1.5px solid currentColor; border-radius: 4px; transform: rotate(-45deg); }
 .icon-link::before { top: 3px; right: 1px; }
 .icon-link::after { bottom: 3px; left: 1px; }

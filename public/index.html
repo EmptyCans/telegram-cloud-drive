@@ -40,6 +40,7 @@
         <div id="account-actions" class="row" role="group" aria-label="网盘管理" hidden>
           <button id="manage-links" type="button" aria-label="链接管理" title="链接管理"><span class="icon icon-link" aria-hidden="true"></span></button>
           <button id="settings" type="button" aria-label="设置" title="设置"><span class="icon icon-settings" aria-hidden="true">⚙</span></button>
+          <button id="open-help" type="button" aria-label="使用帮助" title="使用帮助"><span class="icon-help" aria-hidden="true">?</span></button>
           <button id="logout" type="button" aria-label="退出登录" title="退出登录"><span class="icon icon-logout" aria-hidden="true"></span></button>
         </div>
       </nav>
@@ -133,6 +134,19 @@
       <label>目标目录<select id="batch-destination"></select></label>
       <div class="row dialog-actions"><button type="button" data-close>取消</button><button class="primary">移动</button></div>
     </form>
+  </dialog>
+  <dialog id="help-dialog" aria-labelledby="help-title">
+    <div class="toolbar"><h2 id="help-title">使用帮助</h2><button type="button" data-close>关闭</button></div>
+    <dl class="help-topics">
+      <dt>上传文件和文件夹</dt>
+      <dd>可以选择、拖放文件或文件夹，也可以粘贴文件。上传文件夹会保留目录结构。</dd>
+      <dt>管理和预览</dt>
+      <dd>点击文件夹进入目录，点击支持的文件在线预览。用「批量操作」多选、移动或删除。</dd>
+      <dt>分享和收集文件</dt>
+      <dd>在文件或文件夹的更多菜单中创建分享短链。公开文件夹的访客可以浏览、下载、上传和新建目录。</dd>
+      <dt>链接管理和设置</dt>
+      <dd>用侧栏的链条图标查看、复制或撤销分享。用齿轮图标修改站点名称和单文件上传上限。</dd>
+    </dl>
   </dialog>
   <dialog id="settings-dialog" aria-labelledby="settings-title">
     <form id="settings-form">

@@ -983,6 +983,7 @@ $("settings").addEventListener("click", () => {
   for (const [name, value] of Object.entries(config)) form.elements.namedItem(name).value = value;
   $("settings-dialog").showModal();
 });
+$("open-help").addEventListener("click", () => $("help-dialog").showModal());
 $("settings-form").addEventListener("submit", action(async (event) => {
   event.preventDefault();
   const form = new FormData(event.target);
