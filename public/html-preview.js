@@ -3,6 +3,21 @@ import { isDocumentPreview, isRenderedDocument, isWorkbookPreview, previewType }
 const status = document.getElementById("status");
 const frame = document.querySelector("iframe");
 
+function decodePlainText(buffer) {
+  const bytes = new Uint8Array(buffer);
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return new TextDecoder("utf-16le").decode(bytes);
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder("utf-16be").decode(bytes);
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    try {
+      return new TextDecoder("gb18030", { fatal: true }).decode(bytes);
+    } catch {
+      return new TextDecoder("utf-8").decode(bytes);
+    }
+  }
+}
+
 function downloadFallback(message, url, name) {
   const link = document.createElement("a");
   link.href = url;
@@ -46,6 +61,14 @@ async function loadPreview() {
     return;
   }
   const blob = await response.blob();
+  if (type === "text/plain") {
+    const text = document.createElement("pre");
+    text.className = "plain-text-preview";
+    text.textContent = decodePlainText(await blob.arrayBuffer());
+    document.body.append(text);
+    status.hidden = true;
+    return;
+  }
   if (isWorkbookPreview(type)) {
     try {
       const { renderWorkbook } = await import("/document-renderers.js");
@@ -79,6 +102,7 @@ async function loadPreview() {
     player.className = "shared-media-player";
     player.controls = true;
     player.playsInline = true;
+    if (code && !file && kind === "video") player.classList.add("shared-video-full");
     player.setAttribute("aria-label", name);
     player.addEventListener("error", () => {
       player.hidden = true;

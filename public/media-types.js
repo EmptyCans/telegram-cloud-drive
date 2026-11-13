@@ -1,6 +1,6 @@
 const types = new Map([
   ["pdf", "application/pdf"], ["html", "text/html"], ["htm", "text/html"],
-  ["md", "text/markdown"],
+  ["md", "text/markdown"], ["txt", "text/plain"],
   ["docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
   ["xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
   ["jpg", "image/jpeg"], ["jpeg", "image/jpeg"], ["png", "image/png"],
@@ -22,7 +22,7 @@ export function previewType(item) {
 }
 
 export function isDocumentPreview(type) {
-  return type === "application/pdf" || type === "text/html" || isRenderedDocument(type) || isWorkbookPreview(type);
+  return type === "application/pdf" || type === "text/html" || type === "text/plain" || isRenderedDocument(type) || isWorkbookPreview(type);
 }
 
 export function isWorkbookPreview(type) {

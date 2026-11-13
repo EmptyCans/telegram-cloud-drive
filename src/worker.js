@@ -1,4 +1,5 @@
-import { isDocumentPreview, previewType } from "../public/media-types.js";
+import { previewType } from "../public/media-types.js";
+import { extensionGroups } from "../public/file-icons.js";
 
 const MiB = 1024 * 1024;
 const downloadLimit = 20 * MiB;
@@ -185,6 +186,16 @@ const entrySort = new Map([
   ["created-desc", "created_at DESC"]
 ]);
 
+function entryTypeFilter(type, firstParameter) {
+  if (type === "folder") return { sql: "kind = 'folder'", values: [] };
+  const extensions = type === "pdf" ? ["pdf"] : extensionGroups.get(type);
+  if (!extensions) return { sql: "1", values: [] };
+  const values = extensions.map(extension => "." + extension);
+  const sql = values.map((value, i) =>
+    `substr(lower(name), -${value.length}) = ?${firstParameter ? firstParameter + i : ""}`).join(" OR ");
+  return { sql: `kind = 'file' AND (${sql})`, values };
+}
+
 async function list(db, url) {
   const q = (url.searchParams.get("q") ?? "").trim().slice(0, 120);
   const tag = (url.searchParams.get("tag") ?? "").trim().slice(0, 24);
@@ -206,6 +217,9 @@ async function list(db, url) {
     conditions.push("EXISTS (SELECT 1 FROM json_each(tags) WHERE value = ?)");
     parameters.push(tag);
   }
+  const filter = entryTypeFilter(url.searchParams.get("type"));
+  conditions.push(filter.sql);
+  parameters.push(...filter.values);
   const where = conditions.join(" AND ");
   const sortOrder = `kind DESC, ${order}, id`;
   if (focus) {
@@ -336,7 +350,7 @@ async function content(db, env, column, id, preview, inboxCode = null) {
   const upstream = await fetch(`https://api.telegram.org/file/bot${token}/${file.file_path}`, { redirect: "manual" })
     .catch(() => null);
   if (!upstream?.ok || !upstream.body) throw new HttpError(502, "下载失败，请稍后重试");
-  const inlineType = imageTypes.has(type) || (column === "share_code" && type && !isDocumentPreview(type)) ? type : null;
+  const inlineType = imageTypes.has(type) ? type : null;
   const encodedName = encodeURIComponent(item.name.toWellFormed()).replace(/['()*]/g, (character) =>
     "%" + character.charCodeAt(0).toString(16).toUpperCase());
   return new Response(upstream.body, {
@@ -464,15 +478,32 @@ async function publicFolder(request, db, env, url, code, root) {
   const folder = id === root.id ? root : await db.prepare(`SELECT id, name, parent_id FROM entries
     WHERE id = ?1 AND ${inboxContains("?1", "?2")}`).bind(id, code).first();
   if (!folder) throw new HttpError(404, "文件夹不存在或已移出公开范围");
-  if (request.method === "POST") return upload(request, db, env, url, { id, code });
+  if (request.method === "POST") {
+    if (url.searchParams.get("action") === "mkdir") {
+      const body = await bodyJson(request);
+      return createEntry(db, { parent: id, kind: "folder", name: validName(body?.name), inboxCode: code });
+    }
+    return upload(request, db, env, url, { id, code });
+  }
 
   const offset = Math.max(0, Math.min(1000000, Number.parseInt(url.searchParams.get("offset"), 10) || 0));
+  const query = (url.searchParams.get("q") ?? "").trim().slice(0, 120);
+  const order = entrySort.get(url.searchParams.get("sort")) ?? entrySort.get("name-asc");
+  const filter = entryTypeFilter(url.searchParams.get("type"), 5);
   const { results } = await db.prepare(`SELECT id, kind, name, mime, size, created_at FROM entries
     WHERE parent_id = ?1 AND deleted_at IS NULL AND ${inboxContains("?1", "?2")}
-    ORDER BY kind DESC, name COLLATE NOCASE, id LIMIT 51 OFFSET ?3`).bind(id, code, offset).all();
+    AND (?4 = '' OR instr(lower(name), lower(?4)) > 0)
+    AND ${filter.sql}
+    ORDER BY kind DESC, ${order}, id LIMIT 51 OFFSET ?3`).bind(id, code, offset, query, ...filter.values).all();
   const { maxUploadMiB } = await getConfig(env);
+  const { results: folders } = await db.prepare(`WITH RECURSIVE tree(id, parent_id, name) AS (
+    SELECT id, NULL, name FROM entries WHERE id = ?1 AND share_code = ?2 AND deleted_at IS NULL AND ${activeShare}
+    UNION
+    SELECT e.id, e.parent_id, e.name FROM entries e JOIN tree ON e.parent_id = tree.id
+    WHERE e.kind = 'folder' AND e.deleted_at IS NULL AND e.id <> ?1
+  ) SELECT id, parent_id, name FROM tree ORDER BY name COLLATE NOCASE, id`).bind(root.id, code).all();
   return json({ name: folder.name, parent: folder.parent_id ?? null, root: id === root.id,
-    entries: results.slice(0, 50), hasMore: results.length > 50, maxUploadMiB });
+    entries: results.slice(0, 50), folders, rootId: root.id, hasMore: results.length > 50, maxUploadMiB });
 }
 
 async function activeShortShare(db, code) {
@@ -504,7 +535,8 @@ async function handle(request, env) {
       return content(db, env, "id", file, false, shortShare[1]);
     }
     if (file) throw new HttpError(404, "文件不存在");
-    if (isDocumentPreview(previewType(item))) return sharePage(env, url, "/html-preview");
+    const type = previewType(item);
+    if (type && !imageTypes.has(type)) return sharePage(env, url, "/html-preview");
     return content(db, env, "share_code", shortShare[1], true);
   }
   const sharedFile = pathname.match(/^\/api\/share\/([a-zA-Z0-9_-]{12})\/download$/);

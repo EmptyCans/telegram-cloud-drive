@@ -17,11 +17,6 @@
         <span class="brand-mark" aria-hidden="true"><span class="icon icon-cloud"></span></span>
         <div><h1 id="title">云盘</h1><p id="description" hidden></p></div>
       </div>
-      <div id="account-actions" class="row" hidden>
-        <button id="manage-links">链接管理</button>
-        <button id="settings"><span class="icon icon-settings" aria-hidden="true">⚙</span> 设置</button>
-        <button id="logout">退出登录</button>
-      </div>
     </div>
   </header>
   <main>
@@ -35,18 +30,31 @@
     </form>
     <section id="manager" hidden aria-label="文件管理">
       <nav class="sidebar" aria-label="文件结构">
-        <h2>文件结构</h2>
-        <button id="go-root" class="tree-folder" data-upload-parent="" aria-current="location"><span class="icon icon-folder" aria-hidden="true"></span>根目录</button>
+        <div class="directory-scroll" tabindex="0" aria-label="目录树">
+        <div class="tree-row" data-upload-parent="">
+          <button id="root-toggle" class="tree-toggle" type="button" aria-label="根目录的子目录" aria-controls="folder-tree" aria-expanded="true"></button>
+          <button id="go-root" class="tree-folder" aria-current="location"><span class="icon icon-folder" aria-hidden="true"></span>根目录</button>
+        </div>
         <ul id="folder-tree" class="folder-tree"></ul>
+        </div>
+        <div id="account-actions" class="row" role="group" aria-label="网盘管理" hidden>
+          <button id="manage-links" type="button" aria-label="链接管理" title="链接管理"><span class="icon icon-link" aria-hidden="true"></span></button>
+          <button id="settings" type="button" aria-label="设置" title="设置"><span class="icon icon-settings" aria-hidden="true">⚙</span></button>
+          <button id="open-help" type="button" aria-label="使用帮助" title="使用帮助"><span class="icon-help" aria-hidden="true">?</span></button>
+          <button id="logout" type="button" aria-label="退出登录" title="退出登录"><span class="icon icon-logout" aria-hidden="true"></span></button>
+        </div>
       </nav>
       <div id="file-view" class="workspace">
         <div class="toolbar workspace-heading">
           <h2>文件</h2>
           <div class="row">
+            <button id="batch-toggle" type="button" aria-pressed="false">批量操作</button>
             <button id="new-folder"><span aria-hidden="true">＋</span> 新建目录</button>
+            <button id="choose-directory" type="button">上传文件夹</button>
             <button id="choose-files" class="primary"><span aria-hidden="true">↑</span> 上传文件</button>
           </div>
           <input id="file-input" type="file" multiple hidden>
+          <input id="directory-input" type="file" webkitdirectory multiple hidden>
         </div>
         <div id="upload-progress" class="upload-progress" hidden>
           <span></span><progress max="100" aria-label="文件上传进度"></progress>
@@ -54,6 +62,20 @@
         <form id="search" class="row">
           <label class="search-field"><span class="icon icon-search" aria-hidden="true"></span><input name="q" type="search" placeholder="搜索文件或目录" aria-label="搜索名称"></label>
           <input name="tag" type="search" placeholder="筛选标签" aria-label="筛选标签">
+          <select id="file-type" name="type" aria-label="文件类型">
+            <option value="">全部类型</option>
+            <option value="folder">文件夹</option>
+            <option value="image">图片</option>
+            <option value="video">视频</option>
+            <option value="audio">音频</option>
+            <option value="pdf">PDF</option>
+            <option value="document">文档</option>
+            <option value="sheet">表格</option>
+            <option value="slides">演示文稿</option>
+            <option value="archive">压缩包</option>
+            <option value="code">代码和网页</option>
+            <option value="app">安装包</option>
+          </select>
           <button>搜索</button>
         </form>
         <div class="list-toolbar toolbar">
@@ -74,6 +96,17 @@
             <button type="button" data-view="grid" aria-pressed="false">网格</button>
           </div>
         </div>
+        <div id="batch-toolbar" class="row" hidden>
+          <div class="row batch-selection">
+            <label><input id="batch-all" type="checkbox"> 全选当前页</label>
+            <span id="batch-count" aria-live="polite"></span>
+          </div>
+          <div class="row batch-actions">
+            <button id="batch-move" type="button">批量移动</button>
+            <button id="batch-delete" type="button">批量删除</button>
+          </div>
+        </div>
+        <div class="file-scroll" tabindex="0" aria-label="文件列表">
         <div id="drop-zone">
           <div id="entries-heading" class="list-heading" aria-hidden="true">
             <span>名称</span><span class="list-column">创建时间</span><span class="list-column">类型</span>
@@ -84,6 +117,7 @@
             <span class="empty-mark" aria-hidden="true"><span class="icon icon-folder"></span></span>
             <p id="empty-message"></p>
           </div>
+        </div>
         </div>
         <div id="pagination" class="row" hidden>
           <button id="previous">上一页</button><span id="page"></span><button id="next">下一页</button>
@@ -105,9 +139,30 @@
         <ol id="notices" aria-live="polite"></ol>
         <p class="no-notices">暂无通知</p>
       </aside>
+      <footer class="drive-footer">Telegram Cloud Drive · MIT 许可证</footer>
     </section>
     <p id="notice" role="status" aria-live="polite"></p>
   </main>
+  <dialog id="batch-move-dialog" aria-labelledby="batch-move-title">
+    <form id="batch-move-form">
+      <h2 id="batch-move-title">批量移动</h2>
+      <label>目标目录<select id="batch-destination"></select></label>
+      <div class="row dialog-actions"><button type="button" data-close>取消</button><button class="primary">移动</button></div>
+    </form>
+  </dialog>
+  <dialog id="help-dialog" aria-labelledby="help-title">
+    <div class="toolbar"><h2 id="help-title">使用帮助</h2><button type="button" data-close>关闭</button></div>
+    <dl class="help-topics">
+      <dt>上传文件和文件夹</dt>
+      <dd>可以选择、拖放文件或文件夹，也可以粘贴文件。上传文件夹会保留目录结构。</dd>
+      <dt>管理和预览</dt>
+      <dd>点击文件夹进入目录，点击支持的文件在线预览。用「批量操作」多选、移动或删除。</dd>
+      <dt>分享和收集文件</dt>
+      <dd>在文件或文件夹的更多菜单中创建分享短链。公开文件夹的访客可以浏览、下载、上传和新建目录。</dd>
+      <dt>链接管理和设置</dt>
+      <dd>用侧栏的链条图标查看、复制或撤销分享。用齿轮图标修改站点名称和单文件上传上限。</dd>
+    </dl>
+  </dialog>
   <dialog id="settings-dialog" aria-labelledby="settings-title">
     <form id="settings-form">
       <h2 id="settings-title">站点设置</h2>
@@ -140,10 +195,10 @@
       <div class="row"><button type="button" data-preview-download>下载原文件</button><button type="button" data-preview-close aria-label="关闭">×</button></div>
     </header>
     <div class="media-stage">
-      <button type="button" data-previous aria-label="上一项">‹</button>
+      <button type="button" data-previous aria-label="上一项"></button>
       <div id="preview-content"></div>
       <p id="preview-status" role="status"></p>
-      <button type="button" data-next aria-label="下一项">›</button>
+      <button type="button" data-next aria-label="下一项"></button>
     </div>
     <footer class="media-position" aria-live="polite"></footer>
   </dialog>

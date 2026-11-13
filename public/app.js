@@ -4,7 +4,7 @@ import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
 import { entryDateFormat, entryExtension, formatEntryKind, formatEntrySize } from "./entry-format.js";
 import { bindViewSwitch } from "./view-switch.js";
-import { pastedFiles, showUploadProgress, uploadFile } from "./uploads.js";
+import { droppedItems, pastedFiles, selectedDirectoryItems, showUploadProgress, uploadDirectories, uploadFile } from "./uploads.js";
 
 const $ = (id) => document.getElementById(id);
 const MiB = 1024 * 1024;
@@ -14,9 +14,12 @@ let config = { title: "云盘", description: "", maxUploadMiB: 20 };
 let folders = [];
 let folderIndex = new Map();
 const expandedFolders = new Set();
+let visibleEntries = [];
+let batchBusy = false;
 let page = 0;
 let query = "";
 let tag = "";
+let fileType = "";
 let listing = 0;
 let uploading = false;
 
@@ -101,8 +104,9 @@ function loggedOut() {
   folders = [];
   folderIndex.clear();
   expandedFolders.clear();
+  setBranchExpanded($("root-toggle"), $("folder-tree"), "", true);
   page = 0;
-  query = tag = "";
+  query = tag = fileType = "";
   $("search").reset();
   stopCovers?.();
   stopCovers = undefined;
@@ -131,7 +135,7 @@ async function loggedIn() {
 }
 
 function resetFilters() {
-  query = tag = "";
+  query = tag = fileType = "";
   page = 0;
   $("search").reset();
 }
@@ -159,6 +163,7 @@ async function openFolder(folder) {
   if (location.hash === "#links") location.hash = "";
   const path = folderPath(folder.id);
   folders = path.length ? path : [folder];
+  setBranchExpanded($("root-toggle"), $("folder-tree"), "", true);
   resetFilters();
   await refresh();
 }
@@ -188,18 +193,24 @@ async function loadFolderTree() {
       row.dataset.uploadParent = folder.id;
       const open = button("", () => openFolder(folder));
       open.className = "tree-folder";
+      open.title = folder.name;
       open.dataset.folderId = folder.id;
       const name = document.createElement("span");
       name.className = "tree-folder-name";
       name.textContent = folder.name;
-      open.append(name, sharingBadge(folder));
+      const icon = document.createElement("span");
+      icon.className = "icon icon-folder";
+      icon.setAttribute("aria-hidden", "true");
+      const badge = sharingBadge(folder);
+      badge.title = badge.textContent;
+      open.append(icon, name, badge);
       moveTarget(row, folder.id, folder.name);
       item.append(row);
       if (children.has(folder.id)) {
         const branch = document.createElement("ul");
         branch.className = "folder-tree";
         branch.append(...renderBranch(folder.id));
-        const toggle = button("▸", () => setBranchExpanded(toggle, branch, folder.id, branch.hidden));
+        const toggle = button("", () => setBranchExpanded(toggle, branch, folder.id, branch.hidden));
         toggle.className = "tree-toggle";
         toggle.setAttribute("aria-label", folder.name + "的子目录");
         setBranchExpanded(toggle, branch, folder.id, expandedFolders.has(folder.id));
@@ -376,6 +387,7 @@ function sharingBadge(item) {
   badge.className = "sharing-badge";
   if (directlyShared || inherited) {
     badge.classList.add("is-shared");
+    if (inherited) badge.classList.add("is-inherited");
     badge.textContent = inherited ? "随目录公开" : item.kind === "file" ? "已分享" : "公开";
   } else if (hasLink) {
     badge.classList.add("is-expired");
@@ -485,7 +497,7 @@ async function showLinksView() {
   }
 }
 
-async function remove(item) {
+async function remove(item, refreshAfter = true) {
   const path = itemPath(item);
   const options = { method: "DELETE" };
   let result;
@@ -494,7 +506,7 @@ async function remove(item) {
   } catch (error) {
     if (error.code !== "LEGACY_DESTINATION") throw error;
     const same = confirm("部分旧文件未记录原始存储位置。只有这些文件确实存放在当前配置的位置时，才点击确定同步删除。");
-    if (!same && !confirm("从云盘移除这些旧文件，保留它们的原始消息？")) return;
+    if (!same && !confirm("从云盘移除这些旧文件，保留它们的原始消息？")) return false;
     result = await api(path + "?legacy=" + (same ? "current" : "skip"), options);
   }
   const { removed, originalConfirmed, originalUnconfirmed } = result;
@@ -502,8 +514,60 @@ async function remove(item) {
   if (originalConfirmed) message += "，已确认清除 " + originalConfirmed + " 条原始消息";
   if (originalUnconfirmed) message += "，" + originalUnconfirmed + " 条原始消息未确认删除，请到原位置检查";
   notice(message, originalUnconfirmed > 0);
-  if (item.kind === "folder") await loadFolderTree();
-  await refresh();
+  if (refreshAfter) {
+    if (item.kind === "folder") await loadFolderTree();
+    await refresh();
+  }
+  return true;
+}
+
+function batchChecks() {
+  return [...$("entries").querySelectorAll(".batch-check")];
+}
+
+function updateBatchControls() {
+  const checks = batchChecks();
+  const count = checks.filter(check => check.checked).length;
+  $("batch-count").textContent = "已选 " + count + " 项";
+  $("batch-all").checked = count > 0 && count === checks.length;
+  $("batch-all").indeterminate = count > 0 && count < checks.length;
+  $("batch-all").disabled = batchBusy || !checks.length;
+  $("batch-toggle").disabled = batchBusy;
+  $("batch-delete").disabled = $("batch-move").disabled = batchBusy || !count;
+  for (const check of checks) check.disabled = batchBusy;
+}
+
+function batchItems() {
+  const ids = new Set(batchChecks().filter(check => check.checked).map(check => check.value));
+  return visibleEntries.filter(item => ids.has(item.id) &&
+    !folderPath(item.parent_id).some(folder => ids.has(folder.id)));
+}
+
+async function runBatch(items, label, operation) {
+  if (batchBusy || !items.length) return;
+  const session = token;
+  batchBusy = true;
+  updateBatchControls();
+  let completed = 0;
+  const failures = [];
+  try {
+    for (const item of items) {
+      if (!token || token !== session) break;
+      try {
+        if (await operation(item) !== false) completed += 1;
+        else failures.push(item.name + " · 已跳过");
+      } catch (error) {
+        failures.push(item.name + " · " + error.message);
+      }
+    }
+    if (!token || token !== session) return;
+    notice(["已" + label + " " + completed + "/" + items.length + " 项", ...failures].join("\n"), failures.length > 0);
+    if (completed && items.some(item => item.kind === "folder")) await loadFolderTree();
+    await refresh();
+  } finally {
+    batchBusy = false;
+    updateBatchControls();
+  }
 }
 
 function renderItem(item, entries) {
@@ -513,9 +577,26 @@ function renderItem(item, entries) {
     ? () => openDocument(item, type)
     : type ? () => preview(item, entries) : null;
   const li = document.createElement("li");
+  const check = document.createElement("input");
+  check.type = "checkbox";
+  check.className = "batch-check";
+  check.value = item.id;
+  check.setAttribute("aria-label", "选择 " + item.name);
+  check.addEventListener("change", updateBatchControls);
+  li.append(check);
+  li.addEventListener("click", event => {
+    if ($("batch-toolbar").hidden || event.target === check || event.target.closest(".actions, .rename-editor")) return;
+    event.stopImmediatePropagation();
+    event.preventDefault();
+    if (!batchBusy) check.click();
+  }, { capture: true });
   li.dataset.entryId = item.id;
   li.draggable = true;
   li.addEventListener("dragstart", (event) => {
+    if (!$("batch-toolbar").hidden) {
+      event.preventDefault();
+      return;
+    }
     draggedItem = item;
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData(entryDragType, item.id);
@@ -632,7 +713,7 @@ function renderItem(item, entries) {
   if (folder || openPreview) {
     li.classList.add("entry-openable");
     li.addEventListener("click", (event) => {
-      if (open.hidden || open.contains(event.target) || actions.contains(event.target)) return;
+      if (event.target === check || open.hidden || open.contains(event.target) || actions.contains(event.target)) return;
       open.click();
     });
   }
@@ -642,7 +723,7 @@ function renderItem(item, entries) {
 async function refresh(focus = null) {
   const sequence = ++listing;
   const params = new URLSearchParams({
-    parent: currentFolder(), q: query, tag, sort: $("sort").value, offset: page * pageSize
+    parent: currentFolder(), q: query, tag, type: fileType, sort: $("sort").value, offset: page * pageSize
   });
   if (focus) params.set("focus", focus);
   const result = await api("/api/entries?" + params);
@@ -669,7 +750,9 @@ async function refresh(focus = null) {
   if (query || tag) crumbs.append(" / 全局搜索");
   const entries = $("entries");
   stopCovers?.();
-  entries.replaceChildren(...result.entries.map(item => renderItem(item, result.entries)));
+  visibleEntries = result.entries;
+  entries.replaceChildren(...visibleEntries.map(item => renderItem(item, visibleEntries)));
+  updateBatchControls();
   stopCovers = observeCovers(entries, { Authorization: "Bearer " + token });
   if (focus) {
     const row = Array.from(entries.children).find((entry) => entry.dataset.entryId === focus);
@@ -678,48 +761,105 @@ async function refresh(focus = null) {
     row?.querySelector(".entry-title").focus({ preventScroll: true });
   }
   $("empty").hidden = result.entries.length > 0;
-  $("empty-message").textContent = query || tag ? "没有符合条件的项目。" : "拖放或粘贴文件，或点击「上传文件」。";
+  $("empty-message").textContent = query || tag || fileType ? "没有符合条件的项目。" : "拖放或粘贴文件，或点击「上传文件」。";
   $("pagination").hidden = !page && !result.hasMore;
   $("previous").disabled = page === 0;
   $("next").disabled = !result.hasMore;
   $("page").textContent = "第 " + (page + 1) + " 页";
 }
 
-async function upload(files, parent = currentFolder()) {
-  if (!token || !files.length) return;
+function upload(files) {
+  if (files.length) return uploadItems(files.map(file => ({ file, path: [] })));
+}
+
+async function uploadItems(items, parent = currentFolder()) {
+  if (!token) return;
   if (uploading) {
     notice("正在上传其他文件，请等待当前批次完成。");
     return;
   }
   uploading = true;
-  $("choose-files").disabled = true;
+  $("choose-files").disabled = $("choose-directory").disabled = true;
   const failures = [];
   let completed = 0;
+  let created = 0;
+  let index = 0;
   const progress = $("upload-progress");
+  const ensurePath = uploadDirectories(parent, async (name, target) => {
+    const { id } = await api("/api/folders", { method: "POST", json: { name, parent: target || null } });
+    created += 1;
+    return id;
+  });
   try {
-    for (const [index, file] of files.entries()) {
+    items = await items;
+    if (!items.length) return;
+    const total = items.filter(item => item.file).length;
+    for (const { file, path } of items) {
       try {
+        if (!file) {
+          await ensurePath(path);
+          continue;
+        }
+        const position = index++;
         if (!file.size || file.size > config.maxUploadMiB * MiB) {
           throw new Error("文件必须大于 0 字节且不超过 " + config.maxUploadMiB + " MiB");
         }
-        const params = new URLSearchParams({ parent, name: file.name });
-        const updateProgress = showUploadProgress(progress, file, index, files.length);
+        const target = await ensurePath(path);
+        const params = new URLSearchParams({ parent: target, name: file.name });
+        const updateProgress = showUploadProgress(progress, file, position, total);
         await uploadFile("/api/upload?" + params, file, { Authorization: "Bearer " + token }, updateProgress);
         completed += 1;
       } catch (error) {
         if (error.status === 401) loggedOut();
-        failures.push(file.name + " · " + error.message);
+        failures.push([...path, ...(file ? [file.name] : [])].join("/") + " · " + error.message);
         if (!token) throw error;
       }
     }
-    if (token) await refresh();
-    notice(["已上传 " + completed + "/" + files.length + " 个文件", ...failures].join("\n"), failures.length > 0);
+    if (created) await loadFolderTree();
+    if (completed || created) await refresh();
+    const summary = ["已上传 " + completed + "/" + total + " 个文件"];
+    if (created) summary.push("已创建 " + created + " 个文件夹");
+    notice([...summary, ...failures].join("\n"), failures.length > 0);
   } finally {
     progress.hidden = true;
     uploading = false;
-    $("choose-files").disabled = false;
+    $("choose-files").disabled = $("choose-directory").disabled = false;
   }
 }
+
+$("batch-toggle").addEventListener("click", () => {
+  const enabled = $("batch-toolbar").hidden;
+  $("batch-toolbar").hidden = !enabled;
+  $("entries").classList.toggle("batch-mode", enabled);
+  $("batch-toggle").setAttribute("aria-pressed", String(enabled));
+  $("batch-toggle").textContent = enabled ? "退出批量" : "批量操作";
+  for (const check of batchChecks()) check.checked = false;
+  updateBatchControls();
+});
+$("batch-all").addEventListener("change", event => {
+  for (const check of batchChecks()) check.checked = event.target.checked;
+  updateBatchControls();
+});
+$("batch-delete").addEventListener("click", action(async () => {
+  const items = batchItems();
+  if (!items.length || !confirm("删除选中的 " + items.length + " 项及其子项目，并尝试同步删除原始消息？")) return;
+  await runBatch(items, "删除", item => remove(item, false));
+}));
+$("batch-move").addEventListener("click", () => {
+  const blocked = new Set(batchItems().filter(item => item.kind === "folder").map(item => item.id));
+  const targets = [...folderIndex.values()].filter(folder => !folderPath(folder.id).some(item => blocked.has(item.id)));
+  $("batch-destination").replaceChildren(new Option("根目录", ""), ...targets.map(folder =>
+    new Option("/" + folderPath(folder.id).map(item => item.name).join("/"), folder.id)));
+  $("batch-move-dialog").showModal();
+});
+$("batch-move-form").addEventListener("submit", action(async event => {
+  event.preventDefault();
+  const parent = $("batch-destination").value || null;
+  $("batch-move-dialog").close();
+  const items = batchItems().filter(item => (item.parent_id ?? null) !== parent);
+  if (!items.length) return notice("所选项目已在目标目录。");
+  await runBatch(items, "移动", item => api(itemPath(item), { method: "PATCH", json: { parent } }));
+}));
 
 document.addEventListener("paste", action(async (event) => {
   if ($("manager").hidden || $("file-view").hidden || document.querySelector("dialog[open]")) return;
@@ -758,7 +898,11 @@ $("share-form").addEventListener("submit", action(async (event) => {
   }
 }));
 $("go-root").addEventListener("click", action(goRoot));
-moveTarget($("go-root"), null, "根目录");
+$("root-toggle").addEventListener("click", () => {
+  const branch = $("folder-tree");
+  setBranchExpanded($("root-toggle"), branch, "", branch.hidden);
+});
+moveTarget($("go-root").parentElement, null, "根目录");
 document.addEventListener("click", (event) => {
   for (const menu of document.querySelectorAll(".actions details[open]")) {
     if (!menu.contains(event.target)) menu.open = false;
@@ -776,9 +920,11 @@ $("search").addEventListener("submit", action(async (event) => {
   const form = new FormData(event.target);
   query = form.get("q").trim();
   tag = form.get("tag").trim();
+  fileType = form.get("type");
   page = 0;
   await refresh();
 }));
+$("file-type").addEventListener("change", () => $("search").requestSubmit());
 $("sort").addEventListener("change", action(async () => {
   page = 0;
   await refresh();
@@ -794,6 +940,14 @@ $("new-folder").addEventListener("click", action(async () => {
 $("previous").addEventListener("click", action(async () => { page -= 1; await refresh(); }));
 $("next").addEventListener("click", action(async () => { page += 1; await refresh(); }));
 $("choose-files").addEventListener("click", () => $("file-input").click());
+const directoryInput = $("directory-input");
+$("choose-directory").hidden = !("webkitdirectory" in directoryInput);
+$("choose-directory").addEventListener("click", () => directoryInput.click());
+directoryInput.addEventListener("change", action(async () => {
+  const items = selectedDirectoryItems(directoryInput.files);
+  directoryInput.value = "";
+  if (items.length) await uploadItems(items);
+}));
 $("file-input").addEventListener("change", action(async (event) => {
   const files = Array.from(event.target.files);
   event.target.value = "";
@@ -824,13 +978,15 @@ $("manager").addEventListener("drop", action(async (event) => {
   event.preventDefault();
   showUploadTarget(undefined);
   const parent = folderUnderPointer(event)?.dataset.uploadParent ?? currentFolder();
-  await upload(Array.from(event.dataTransfer.files), parent);
+  if (uploading || !token) return;
+  await uploadItems(droppedItems(event.dataTransfer), parent);
 }));
 $("settings").addEventListener("click", () => {
   const form = $("settings-form");
   for (const [name, value] of Object.entries(config)) form.elements.namedItem(name).value = value;
   $("settings-dialog").showModal();
 });
+$("open-help").addEventListener("click", () => $("help-dialog").showModal());
 $("settings-form").addEventListener("submit", action(async (event) => {
   event.preventDefault();
   const form = new FormData(event.target);
