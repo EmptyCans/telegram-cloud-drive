@@ -386,6 +386,7 @@ function sharingBadge(item) {
   badge.className = "sharing-badge";
   if (directlyShared || inherited) {
     badge.classList.add("is-shared");
+    if (inherited) badge.classList.add("is-inherited");
     badge.textContent = inherited ? "随目录公开" : item.kind === "file" ? "已分享" : "公开";
   } else if (hasLink) {
     badge.classList.add("is-expired");

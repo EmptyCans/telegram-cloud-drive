@@ -26,6 +26,8 @@
   --danger-border: #f3cfd5;
   --share-text: #176648;
   --share-background: #e1f5ec;
+  --inherited-share-text: #43765e;
+  --inherited-share-background: #edf8f1;
   --expired-text: #84500c;
   --expired-background: #fff2dc;
   --backdrop: #12203e75;
@@ -58,6 +60,8 @@
     --danger-border: #77414d;
     --share-text: #8fe1bb;
     --share-background: #203d36;
+    --inherited-share-text: #a7cfb9;
+    --inherited-share-background: #263a34;
     --expired-text: #f5c47e;
     --expired-background: #3c3022;
     --backdrop: #070a12b3;
@@ -251,6 +255,7 @@ input::placeholder { color: var(--placeholder); }
 .tag { padding: 2px 7px; border-radius: 20px; color: var(--accent-strong); background: var(--accent-soft); }
 .sharing-badge { flex: none; padding: 1px 5px; border-radius: 6px; background: var(--list-heading); color: var(--muted); font-size: 11px; font-weight: 600; white-space: nowrap; }
 .sharing-badge.is-shared { color: var(--share-text); background: var(--share-background); }
+.sharing-badge.is-inherited { color: var(--inherited-share-text); background: var(--inherited-share-background); }
 .sharing-badge.is-expired { color: var(--expired-text); background: var(--expired-background); }
 .tree-folder .sharing-badge {
   position: relative; width: 14px; height: 14px;
@@ -261,6 +266,7 @@ input::placeholder { color: var(--placeholder); }
   width: 5px; height: 5px; border: 1px solid currentColor; border-radius: 50%;
 }
 .tree-folder .sharing-badge.is-shared::before { background: currentColor; }
+.tree-folder .sharing-badge.is-shared:not(.is-inherited) { color: #22a66d; }
 .tree-folder .sharing-badge.is-expired::before { width: 6px; height: 0; border-width: 1px 0 0; border-radius: 0; }
 .actions { flex-wrap: nowrap; gap: 6px; }
 .actions button, summary { font-size: 13px; }
