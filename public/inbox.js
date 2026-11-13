@@ -255,9 +255,6 @@ async function loadFolder(target = folder, offsetPage = page, historyMode) {
   renderBreadcrumbs(data);
   if (data.folders) renderFolderTree(data);
   $("inbox-limit").textContent = "单个文件不超过 " + maxUploadMiB + " MiB";
-  const up = $("inbox-up");
-  up.hidden = data.root;
-  if (!data.root) up.href = folderAddress(data.parent);
   const grid = $("inbox-entries");
   stopCovers?.();
   grid.replaceChildren(...data.entries.map(item => renderEntry(item, data.entries)));
@@ -284,7 +281,6 @@ async function navigateFolder(target, historyMode) {
   }
 }
 
-$("inbox-up").dataset.folderLink = "";
 panel.addEventListener("click", event => {
   const link = event.target.closest("a[data-folder-link]");
   if (!link || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
