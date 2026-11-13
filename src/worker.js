@@ -477,8 +477,14 @@ async function publicFolder(request, db, env, url, code, root) {
     WHERE parent_id = ?1 AND deleted_at IS NULL AND ${inboxContains("?1", "?2")}
     ORDER BY kind DESC, name COLLATE NOCASE, id LIMIT 51 OFFSET ?3`).bind(id, code, offset).all();
   const { maxUploadMiB } = await getConfig(env);
+  const { results: folders } = await db.prepare(`WITH RECURSIVE tree(id, parent_id, name) AS (
+    SELECT id, NULL, name FROM entries WHERE id = ?1 AND share_code = ?2 AND deleted_at IS NULL AND ${activeShare}
+    UNION
+    SELECT e.id, e.parent_id, e.name FROM entries e JOIN tree ON e.parent_id = tree.id
+    WHERE e.kind = 'folder' AND e.deleted_at IS NULL AND e.id <> ?1
+  ) SELECT id, parent_id, name FROM tree ORDER BY name COLLATE NOCASE, id`).bind(root.id, code).all();
   return json({ name: folder.name, parent: folder.parent_id ?? null, root: id === root.id,
-    entries: results.slice(0, 50), hasMore: results.length > 50, maxUploadMiB });
+    entries: results.slice(0, 50), folders, rootId: root.id, hasMore: results.length > 50, maxUploadMiB });
 }
 
 async function activeShortShare(db, code) {

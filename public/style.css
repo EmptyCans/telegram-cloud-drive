@@ -126,6 +126,9 @@ input::placeholder { color: var(--placeholder); }
 .tree-row:has(.tree-folder[aria-current]) { color: var(--accent-strong); background: var(--accent-soft); }
 .folder-tree .tree-row:not(:has(.tree-toggle)) { padding-left: 16px; }
 .sidebar button { text-align: left; border-color: transparent; }
+.sidebar .tree-folder { text-decoration: none; }
+.inbox-tree-root { list-style: none; margin: 0; padding: 0; }
+.inbox-tree-root .tree-row:not(:has(.tree-toggle)) { padding-left: 16px; }
 .sidebar .tree-folder { flex: 1; min-width: 0; padding: 3px 4px; white-space: nowrap; font-size: 13px; }
 .tree-row .tree-folder { display: flex; align-items: center; gap: 5px; }
 .tree-folder-name { min-width: 0; margin-right: auto; overflow: hidden; text-overflow: ellipsis; }
@@ -421,4 +424,29 @@ dialog.media-preview { width: calc(100% - 24px); max-width: 1440px; height: calc
   #entries li { gap: 7px; padding-inline: 8px; }
   .file-tile { width: 38px; height: 33px; }
   .actions > button, summary { padding-inline: 7px; }
+}
+
+.inbox-layout { display: grid; gap: 12px; }
+.inbox-layout .inbox-panel { width: 100%; min-width: 0; max-width: none; margin: 0; }
+.inbox-no-notices { font-size: 13px; }
+#inbox-status:not(:empty) + .inbox-no-notices,
+.inbox-notifications:has(#inbox-progress:not([hidden])) .inbox-no-notices { display: none; }
+
+@media (min-width: 1061px) {
+  body:has(#manager:not([hidden])) { display: flex; flex-direction: column; height: 100dvh; }
+  body:has(#manager:not([hidden])) > main { flex: 1; min-height: 0; }
+  #manager, .inbox-layout { grid-template-columns: 184px minmax(0, 1fr) minmax(200px, 240px); gap: 20px; align-items: stretch; }
+  #manager { height: 100%; }
+  .inbox-layout { height: calc(100dvh - 2 * clamp(20px, 4vw, 48px)); }
+  .inbox-layout:has(#inbox-sidebar[hidden]) { grid-template-columns: minmax(0, 1fr) minmax(200px, 240px); }
+  #manager > :is(.sidebar, .workspace, .notifications), .inbox-layout > * { min-height: 0; }
+  #manager > .sidebar, .inbox-layout > .sidebar { max-height: none; overflow: hidden; display: flex; flex-direction: column; }
+  #file-view, .inbox-layout .inbox-panel, #manager .notifications { display: flex; flex-direction: column; }
+  :is(#file-view, .inbox-panel, .sidebar, .notifications) > * { flex-shrink: 0; }
+  .directory-scroll, .file-scroll, #notices, #inbox-status { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+  :is(.sidebar, #file-view, .inbox-panel, .notifications) > :is(.directory-scroll, .file-scroll, #notices, #inbox-status) { flex: 1 1 auto; }
+  #notices { max-height: none; align-content: start; }
+  #links-view { overflow: auto; }
+  #entries-heading, .inbox-list-heading { position: sticky; top: 0; z-index: 1; }
+  .file-scroll { scrollbar-gutter: stable; }
 }

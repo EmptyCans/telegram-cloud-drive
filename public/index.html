@@ -36,11 +36,13 @@
     <section id="manager" hidden aria-label="文件管理">
       <nav class="sidebar" aria-label="文件结构">
         <h2>文件结构</h2>
+        <div class="directory-scroll" tabindex="0" aria-label="目录树">
         <div class="tree-row" data-upload-parent="">
           <button id="root-toggle" class="tree-toggle" type="button" aria-label="根目录的子目录" aria-controls="folder-tree" aria-expanded="true"></button>
           <button id="go-root" class="tree-folder" aria-current="location"><span class="icon icon-folder" aria-hidden="true"></span>根目录</button>
         </div>
         <ul id="folder-tree" class="folder-tree"></ul>
+        </div>
       </nav>
       <div id="file-view" class="workspace">
         <div class="toolbar workspace-heading">
@@ -79,6 +81,7 @@
             <button type="button" data-view="grid" aria-pressed="false">网格</button>
           </div>
         </div>
+        <div class="file-scroll" tabindex="0" aria-label="文件列表">
         <div id="drop-zone">
           <div id="entries-heading" class="list-heading" aria-hidden="true">
             <span>名称</span><span class="list-column">创建时间</span><span class="list-column">类型</span>
@@ -89,6 +92,7 @@
             <span class="empty-mark" aria-hidden="true"><span class="icon icon-folder"></span></span>
             <p id="empty-message"></p>
           </div>
+        </div>
         </div>
         <div id="pagination" class="row" hidden>
           <button id="previous">上一页</button><span id="page"></span><button id="next">下一页</button>

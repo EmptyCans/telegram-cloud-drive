@@ -136,6 +136,66 @@ function renderEntry(item, entries) {
   return row;
 }
 
+function renderFolderTree(data) {
+  const tree = $("inbox-tree");
+  const children = new Map();
+  const current = folder || data.rootId;
+  const byId = new Map(data.folders.map(item => [item.id, item]));
+  const ancestors = new Set();
+  for (let item = byId.get(current); item && !ancestors.has(item.id); item = byId.get(item.parent_id)) {
+    ancestors.add(item.id);
+  }
+  const expanded = new Set([...tree.querySelectorAll('[aria-expanded="true"]')].map(toggle => toggle.dataset.folder));
+  for (const item of data.folders) {
+    if (!children.has(item.parent_id)) children.set(item.parent_id, []);
+    children.get(item.parent_id).push(item);
+  }
+  function branch(parent) {
+    const list = document.createElement("ul");
+    if (parent !== null) list.className = "folder-tree";
+    else list.className = "inbox-tree-root";
+    for (const item of children.get(parent) ?? []) {
+      const node = document.createElement("li");
+      const row = document.createElement("div");
+      row.className = "tree-row";
+      node.append(row);
+      if (children.has(item.id)) {
+        const nested = branch(item.id);
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "tree-toggle";
+        toggle.dataset.folder = item.id;
+        toggle.setAttribute("aria-label", item.name + "的子目录");
+        const setExpanded = open => {
+          nested.hidden = !open;
+          toggle.setAttribute("aria-expanded", String(open));
+        };
+        setExpanded(tree.childElementCount ? expanded.has(item.id) : ancestors.has(item.id));
+        toggle.addEventListener("click", () => setExpanded(nested.hidden));
+        row.append(toggle);
+        node.append(nested);
+      }
+      const link = document.createElement("a");
+      link.className = "tree-folder";
+      link.href = folderAddress(item.id === data.rootId ? null : item.id);
+      link.title = item.name;
+      if (item.id === current) link.setAttribute("aria-current", "location");
+      const icon = document.createElement("span");
+      icon.className = "icon icon-folder";
+      icon.setAttribute("aria-hidden", "true");
+      const name = document.createElement("span");
+      name.className = "tree-folder-name";
+      name.textContent = item.name;
+      link.append(icon, name);
+      row.append(link);
+      list.append(node);
+    }
+    return list;
+  }
+  tree.replaceChildren(branch(null));
+  $("inbox-sidebar").hidden = false;
+}
+
 async function loadFolder() {
   const sequence = ++listing;
   const response = await request(folderQuery({ offset: page * pageSize }));
@@ -144,6 +204,7 @@ async function loadFolder() {
   maxUploadMiB = data.maxUploadMiB;
   document.title = data.name;
   $("inbox-title").textContent = data.name;
+  if (data.folders) renderFolderTree(data);
   $("inbox-limit").textContent = "单个文件不超过 " + maxUploadMiB + " MiB";
   const up = $("inbox-up");
   up.hidden = data.root;
@@ -164,6 +225,7 @@ async function loadFolder() {
 function folderError(error) {
   status.textContent = error.message;
   if (error.status === 404) {
+    $("inbox-sidebar").hidden = true;
     form.hidden = true;
     viewSwitch.hidden = true;
     stopCovers?.();
