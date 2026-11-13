@@ -537,7 +537,9 @@ async function handle(request, env) {
     if (!crypto.subtle.timingSafeEqual(supplied, await dragSignature(env, id, expires))) {
       throw new HttpError(404, "下载凭证已失效");
     }
-    return content(await database(env), env, "id", id, false);
+    const response = await content(await database(env), env, "id", id, false);
+    response.headers.set("Content-Security-Policy", "default-src 'none'; sandbox allow-downloads");
+    return response;
   }
   if (pathname === "/api/config" && method === "GET") return json(await getConfig(env));
   if (pathname === "/api/health" && method === "GET") return json({ status: "ok" });

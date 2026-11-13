@@ -1,5 +1,5 @@
 import { createMediaPreview } from "./media-preview.js";
-import { dragDownloadHandle } from "./drag-download.js";
+import { bindDragDownload } from "./drag-download.js";
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
@@ -593,13 +593,17 @@ function renderItem(item, entries) {
   }, { capture: true });
   li.dataset.entryId = item.id;
   li.draggable = true;
+  const setExternalDownload = folder ? null : bindDragDownload(li, item, () =>
+    api(itemPath(item) + "/drag-ticket", { method: "POST" }));
   li.addEventListener("dragstart", (event) => {
     if (!$("batch-toolbar").hidden) {
       event.preventDefault();
       return;
     }
     draggedItem = item;
-    event.dataTransfer.effectAllowed = "move";
+    const canDownload = setExternalDownload?.(event.dataTransfer);
+    event.dataTransfer.effectAllowed = canDownload ? "copyMove" : "move";
+    if (setExternalDownload && !canDownload) notice("正在准备拖出下载，请稍后再拖一次。");
     event.dataTransfer.setData(entryDragType, item.id);
     li.classList.add("drag-source");
   });
@@ -685,9 +689,6 @@ function renderItem(item, entries) {
       actions.append(badge);
     }
     actions.append(button("下载", () => download(item)));
-    actions.append(dragDownloadHandle(item, action(() => download(item)), () =>
-      api(itemPath(item) + "/drag-ticket", { method: "POST" }),
-    () => notice("正在准备拖出下载，请稍后再拖一次。")));
     if (openPreview) menu.append(button("预览", openPreview));
   }
   if (item.share_code) {
