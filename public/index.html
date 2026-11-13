@@ -83,10 +83,14 @@
           </div>
         </div>
         <div id="batch-toolbar" class="row" hidden>
-          <label><input id="batch-all" type="checkbox"> 全选当前页</label>
-          <span id="batch-count" aria-live="polite"></span>
-          <button id="batch-move" type="button">批量移动</button>
-          <button id="batch-delete" type="button">批量删除</button>
+          <div class="row batch-selection">
+            <label><input id="batch-all" type="checkbox"> 全选当前页</label>
+            <span id="batch-count" aria-live="polite"></span>
+          </div>
+          <div class="row batch-actions">
+            <button id="batch-move" type="button">批量移动</button>
+            <button id="batch-delete" type="button">批量删除</button>
+          </div>
         </div>
         <div class="file-scroll" tabindex="0" aria-label="文件列表">
         <div id="drop-zone">

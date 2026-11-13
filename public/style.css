@@ -180,17 +180,25 @@ input::placeholder { color: var(--placeholder); }
 }
 .entry-extension { display: none; }
 .batch-check { display: none; }
-#batch-toolbar { margin-bottom: 8px; color: var(--muted); font-size: 13px; }
-#batch-toolbar label { display: inline-flex; align-items: center; gap: 4px; }
+#batch-toolbar {
+  justify-content: space-between; margin-bottom: 8px; padding: 6px 12px;
+  border: 1px solid var(--border); border-radius: 9px; background: var(--list-heading);
+  color: var(--muted); font-size: 13px;
+}
+#batch-toolbar label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+#batch-count { padding-inline-start: 8px; border-inline-start: 1px solid var(--border); }
+#batch-all, #entries.batch-mode .batch-check { width: 15px; height: 15px; margin: 0; accent-color: var(--accent); }
 #batch-toolbar button { padding: 5px 8px; }
-#entries.batch-mode > li { position: relative; padding-left: 35px; }
-#entries.batch-mode .batch-check { position: absolute; display: block; left: 10px; top: 50%; transform: translateY(-50%); margin: 0; accent-color: var(--accent); }
+#batch-delete:enabled { color: var(--danger-text); }
+#entries.batch-mode > li { position: relative; }
+#entries.batch-mode:not(.entries-grid) > li { padding-left: 40px; }
+#entries.batch-mode .batch-check { position: absolute; display: block; left: 12px; top: 50%; transform: translateY(-50%); }
 #entries.batch-mode > li:has(.batch-check:checked) { background: var(--accent-soft); }
 #entries.entries-grid.batch-mode > li { padding-left: 10px; }
 #entries.entries-grid.batch-mode .batch-check { top: 16px; transform: none; }
 #entries.entries-grid.batch-mode .actions { padding-left: 19px; }
 #entries.entries-grid.batch-mode .entry-extension { display: none; }
-#drop-zone:has(.batch-mode) #entries-heading { padding-left: 35px; }
+#drop-zone:has(.batch-mode) #entries-heading { padding-left: 40px; }
 #entries.entries-grid .actions { order: -1; align-self: stretch; justify-content: flex-end; gap: 4px; }
 #entries.entries-grid .entry-extension {
   display: block; min-width: 0; margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
