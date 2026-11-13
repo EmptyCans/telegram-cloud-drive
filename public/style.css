@@ -136,7 +136,7 @@ input::placeholder { color: var(--placeholder); }
 .sidebar .tree-toggle { display: grid; place-items: center; width: 16px; flex: none; padding: 0; color: var(--muted); }
 .tree-toggle::before { content: ""; width: 5px; height: 5px; border: solid currentColor; border-width: 1.5px 1.5px 0 0; transform: rotate(45deg); }
 .tree-toggle[aria-expanded="true"]::before { transform: rotate(135deg); }
-.sidebar .tree-row .icon-folder { width: 15px; }
+.sidebar .tree-row .icon-folder { width: 15px; margin-top: 0; }
 .workspace { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: clamp(14px, 3vw, 26px); box-shadow: var(--shadow); }
 .workspace-heading { margin-bottom: 22px; }
 .workspace-heading button span { margin-right: 3px; }
@@ -233,11 +233,12 @@ input::placeholder { color: var(--placeholder); }
 .sharing-badge.is-shared { color: var(--share-text); background: var(--share-background); }
 .sharing-badge.is-expired { color: var(--expired-text); background: var(--expired-background); }
 .tree-folder .sharing-badge {
-  display: inline-grid; place-items: center; width: 14px; height: 14px;
+  position: relative; width: 14px; height: 14px;
   padding: 0; border-radius: 50%; font-size: 0;
 }
 .tree-folder .sharing-badge::before {
-  content: ""; width: 5px; height: 5px; border: 1px solid currentColor; border-radius: 50%;
+  content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 5px; height: 5px; border: 1px solid currentColor; border-radius: 50%;
 }
 .tree-folder .sharing-badge.is-shared::before { background: currentColor; }
 .tree-folder .sharing-badge.is-expired::before { width: 6px; height: 0; border-width: 1px 0 0; border-radius: 0; }
