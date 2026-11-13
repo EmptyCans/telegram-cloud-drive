@@ -364,7 +364,7 @@ input::placeholder { color: var(--placeholder); }
 .inbox-grid:not(.inbox-list) .inbox-meta { display: none; }
 .inbox-list .inbox-meta { justify-content: flex-start; }
 .inbox-list { display: block; margin-top: 0; }
-.inbox-list li { display: flex; align-items: center; gap: 8px; padding: 0 10px; text-align: left; }
+.inbox-list li { display: flex; align-items: center; gap: 8px; padding: 0 10px; text-align: left; border-radius: 0; }
 .inbox-list li + li { border-top: 1px solid var(--border); }
 .inbox-panel .inbox-list .inbox-tile {
   display: grid; flex: 1; grid-template-columns: 48px minmax(0, 1fr);
@@ -536,5 +536,5 @@ dialog.media-preview { width: calc(100% - 24px); max-width: 1440px; height: calc
   #notices { max-height: none; align-content: start; }
   #links-view { overflow: auto; }
   #file-view > #drop-zone, .inbox-panel > .inbox-file-list { flex: 1 1 0; }
-  :is(#pagination, #inbox-pagination)[hidden] { display: flex !important; visibility: hidden; }
+  #pagination[hidden] { display: flex !important; visibility: hidden; }
 }
