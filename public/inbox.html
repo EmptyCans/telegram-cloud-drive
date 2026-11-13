@@ -45,6 +45,20 @@
           <button id="inbox-submit" class="primary" type="button">上传文件</button>
         </div>
       </form>
+      <form id="inbox-search" class="row" role="search" hidden>
+        <input id="inbox-query" type="search" placeholder="搜索当前目录" aria-label="搜索当前目录" maxlength="120">
+        <button type="submit">搜索</button>
+        <label class="sort-control">排序
+          <select id="inbox-sort">
+            <option value="name-asc">名称 · 升序</option>
+            <option value="name-desc">名称 · 降序</option>
+            <option value="created-desc">创建时间 · 最新</option>
+            <option value="created-asc">创建时间 · 最早</option>
+            <option value="size-desc">大小 · 从大到小</option>
+            <option value="size-asc">大小 · 从小到大</option>
+          </select>
+        </label>
+      </form>
       <div class="file-scroll" tabindex="0" aria-label="文件列表">
       <div class="inbox-list-heading" aria-hidden="true">
         <span>名称</span><span>创建时间</span><span>类型</span><span>大小</span><span>操作</span>

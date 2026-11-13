@@ -473,9 +473,12 @@ async function publicFolder(request, db, env, url, code, root) {
   }
 
   const offset = Math.max(0, Math.min(1000000, Number.parseInt(url.searchParams.get("offset"), 10) || 0));
+  const query = (url.searchParams.get("q") ?? "").trim().slice(0, 120);
+  const order = entrySort.get(url.searchParams.get("sort")) ?? entrySort.get("name-asc");
   const { results } = await db.prepare(`SELECT id, kind, name, mime, size, created_at FROM entries
     WHERE parent_id = ?1 AND deleted_at IS NULL AND ${inboxContains("?1", "?2")}
-    ORDER BY kind DESC, name COLLATE NOCASE, id LIMIT 51 OFFSET ?3`).bind(id, code, offset).all();
+    AND (?4 = '' OR instr(lower(name), lower(?4)) > 0)
+    ORDER BY kind DESC, ${order}, id LIMIT 51 OFFSET ?3`).bind(id, code, offset, query).all();
   const { maxUploadMiB } = await getConfig(env);
   const { results: folders } = await db.prepare(`WITH RECURSIVE tree(id, parent_id, name) AS (
     SELECT id, NULL, name FROM entries WHERE id = ?1 AND share_code = ?2 AND deleted_at IS NULL AND ${activeShare}

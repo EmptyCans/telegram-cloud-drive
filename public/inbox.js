@@ -22,6 +22,8 @@ const pageSize = 50;
 let page = 0;
 let maxUploadMiB;
 let listing = 0;
+let query = "";
+let sort = "name-asc";
 let navigating = false;
 let treeSnapshot;
 
@@ -265,11 +267,13 @@ function renderFolderTree(data) {
   $("inbox-sidebar").hidden = false;
 }
 
-async function loadFolder(target = folder, offsetPage = page, historyMode) {
+async function loadFolder(target = folder, offsetPage = page, historyMode, filters = { query, sort }) {
   const sequence = ++listing;
   let data;
   try {
-    const response = await request(folderQuery({ offset: offsetPage * pageSize }, target));
+    const response = await request(folderQuery({
+      offset: offsetPage * pageSize, q: filters.query, sort: filters.sort
+    }, target));
     data = await response.json();
   } catch (error) {
     if (sequence !== listing) return;
@@ -277,7 +281,12 @@ async function loadFolder(target = folder, offsetPage = page, historyMode) {
   }
   if (sequence !== listing) return;
   if (historyMode === "push") history.pushState(null, "", folderAddress(target));
-  if (folder !== target || page !== offsetPage) panel.querySelector(".file-scroll").scrollTop = 0;
+  if (folder !== target || page !== offsetPage || query !== filters.query || sort !== filters.sort) {
+    panel.querySelector(".file-scroll").scrollTop = 0;
+  }
+  ({ query, sort } = filters);
+  $("inbox-query").value = query;
+  $("inbox-sort").value = sort;
   folder = target;
   page = offsetPage;
   maxUploadMiB = data.maxUploadMiB;
@@ -291,12 +300,14 @@ async function loadFolder(target = folder, offsetPage = page, historyMode) {
   grid.replaceChildren(...data.entries.map(item => renderEntry(item, data.entries)));
   stopCovers = observeCovers(grid);
   $("inbox-empty").hidden = data.entries.length > 0;
+  $("inbox-empty").textContent = query ? "没有找到匹配的文件或文件夹。" : "这个文件夹还没有文件。";
   $("inbox-pagination").hidden = !page && !data.hasMore;
   $("inbox-previous").disabled = page === 0;
   $("inbox-next").disabled = !data.hasMore;
   $("inbox-page").textContent = "第 " + (page + 1) + " 页";
   form.hidden = false;
   viewSwitch.hidden = false;
+  $("inbox-search").hidden = false;
 }
 
 async function navigateFolder(target, historyMode) {
@@ -305,7 +316,7 @@ async function navigateFolder(target, historyMode) {
   loading.hidden = false;
   const expected = listing + 1;
   try {
-    await loadFolder(target, 0, historyMode);
+    await loadFolder(target, 0, historyMode, { query: "", sort });
   } catch (error) {
     if (historyMode === "pop") history.replaceState(null, "", folderAddress(folder));
     status.textContent = error.message;
@@ -335,6 +346,7 @@ function folderError(error) {
     $("inbox-sidebar").hidden = true;
     form.hidden = true;
     viewSwitch.hidden = true;
+    $("inbox-search").hidden = true;
     stopCovers?.();
     $("inbox-entries").replaceChildren();
     $("inbox-empty").hidden = $("inbox-pagination").hidden = true;
@@ -465,6 +477,22 @@ window.addEventListener("drop", (event) => {
     void uploadItems(droppedItems(event.dataTransfer));
   }
 });
+
+function applyFilters() {
+  if (navigating || submit.disabled) return;
+  loadFolder(folder, 0, undefined, {
+    query: $("inbox-query").value.trim(), sort: $("inbox-sort").value
+  }).catch(folderError);
+}
+
+$("inbox-search").addEventListener("submit", event => {
+  event.preventDefault();
+  applyFilters();
+});
+$("inbox-query").addEventListener("input", event => {
+  if (!event.target.value && query) applyFilters();
+});
+$("inbox-sort").addEventListener("change", applyFilters);
 
 $("inbox-previous").addEventListener("click", () => {
   if (!navigating && !submit.disabled) loadFolder(folder, page - 1).catch(folderError);
