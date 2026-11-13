@@ -1,4 +1,5 @@
 import { createMediaPreview } from "./media-preview.js";
+import { dragDownloadHandle } from "./drag-download.js";
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
@@ -684,6 +685,9 @@ function renderItem(item, entries) {
       actions.append(badge);
     }
     actions.append(button("下载", () => download(item)));
+    actions.append(dragDownloadHandle(item, action(() => download(item)), () =>
+      api(itemPath(item) + "/drag-ticket", { method: "POST" }),
+    () => notice("正在准备拖出下载，请稍后再拖一次。")));
     if (openPreview) menu.append(button("预览", openPreview));
   }
   if (item.share_code) {

@@ -250,7 +250,7 @@ input::placeholder { color: var(--placeholder); }
 .entry-badges { display: contents; }
 @container (min-width: 620px) {
   #entries-heading, #entries:not(.entries-grid) > li {
-    display: grid; grid-template-columns: 48px minmax(0, 1fr) 142px 62px 70px 94px;
+    display: grid; grid-template-columns: 48px minmax(0, 1fr) 142px 62px 70px 128px;
     gap: 0 12px; padding-inline: 13px; align-items: center;
   }
   #entries-heading > :first-child { grid-column: span 2; }
@@ -284,6 +284,10 @@ input::placeholder { color: var(--placeholder); }
 .tree-folder .sharing-badge.is-shared:not(.is-inherited) { color: #22a66d; }
 .tree-folder .sharing-badge.is-expired::before { width: 6px; height: 0; border-width: 1px 0 0; border-radius: 0; }
 .actions { flex-wrap: nowrap; gap: 6px; }
+.actions > .drag-download { display: grid; place-items: center; width: 28px; height: 32px; padding: 0; cursor: grab; color: var(--muted); }
+.drag-download::before { content: "↗"; font-size: 15px; }
+#entries.entries-grid .actions > .drag-download { padding: 0; }
+#entries.entries-grid .actions:has(.drag-download) .entry-extension { flex: 1; }
 .actions button, summary { font-size: 13px; }
 .actions > button, summary { padding: 6px 10px; }
 .actions details { position: relative; }
