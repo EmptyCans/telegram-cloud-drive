@@ -1,3 +1,4 @@
+import { createMediaPreview } from "./media-preview.js";
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
@@ -18,8 +19,7 @@ const pageSize = 50;
 let page = 0;
 let maxUploadMiB;
 let listing = 0;
-let previewUrl;
-let previewRequest;
+
 let stopCovers;
 
 const viewSwitch = $("inbox-view-switch");
@@ -53,50 +53,15 @@ function fileAddress(item) {
   return endpoint + "/" + encodeURIComponent(item.id) + "/download";
 }
 
-function clearPreview() {
-  previewRequest?.abort();
-  previewRequest = undefined;
-  const content = $("preview-content");
-  content.querySelector("audio, video")?.pause();
-  content.replaceChildren();
-  if (previewUrl) URL.revokeObjectURL(previewUrl);
-  previewUrl = undefined;
-}
+const preview = createMediaPreview($("inbox-preview"), async (item, _type, signal) =>
+  (await request(fileAddress(item), { signal })).blob(), (item) => {
+    const link = document.createElement("a");
+    link.href = fileAddress(item);
+    link.download = item.name;
+    link.click();
+  });
 
-async function preview(item, type) {
-  clearPreview();
-  const controller = new AbortController();
-  previewRequest = controller;
-  const dialog = $("inbox-preview");
-  const message = $("preview-status");
-  $("inbox-preview-title").textContent = item.name;
-  message.textContent = "正在加载预览…";
-  dialog.showModal();
-  try {
-    const response = await request(fileAddress(item), { signal: controller.signal });
-    const blob = await response.blob();
-    if (controller.signal.aborted || !dialog.open) return;
-    const kind = type.split("/")[0];
-    const element = document.createElement(kind === "image" ? "img" : kind);
-    if (kind === "image") {
-      element.alt = item.name;
-    } else {
-      element.controls = true;
-      element.playsInline = true;
-    }
-    element.addEventListener("error", () => {
-      if (previewRequest === controller) message.textContent = "浏览器无法预览此文件，请下载后打开。";
-    });
-    previewUrl = URL.createObjectURL(blob.slice(0, blob.size, type));
-    element.src = previewUrl;
-    $("preview-content").append(element);
-    message.textContent = "";
-  } catch (error) {
-    if (!controller.signal.aborted) message.textContent = error.message;
-  }
-}
-
-function renderEntry(item) {
+function renderEntry(item, entries) {
   const row = document.createElement("li");
   const isFolder = item.kind === "folder";
   const type = previewType(item);
@@ -153,7 +118,7 @@ function renderEntry(item) {
       open.rel = "noopener noreferrer";
     } else {
       open.type = "button";
-      open.addEventListener("click", () => preview(item, type));
+      open.addEventListener("click", () => preview(item, entries));
     }
     const download = document.createElement("a");
     download.className = "inbox-download";
@@ -182,7 +147,7 @@ async function loadFolder() {
   if (!data.root) up.href = folderAddress(data.parent);
   const grid = $("inbox-entries");
   stopCovers?.();
-  grid.replaceChildren(...data.entries.map(renderEntry));
+  grid.replaceChildren(...data.entries.map(item => renderEntry(item, data.entries)));
   stopCovers = observeCovers(grid);
   $("inbox-empty").hidden = data.entries.length > 0;
   $("inbox-pagination").hidden = !page && !data.hasMore;
@@ -277,8 +242,6 @@ $("inbox-next").addEventListener("click", () => {
   page += 1;
   loadFolder().catch(folderError);
 });
-$("inbox-preview-close").addEventListener("click", () => $("inbox-preview").close());
-$("inbox-preview").addEventListener("close", clearPreview);
 
 if (code) {
   loadFolder().catch(folderError).finally(() => { panel.hidden = false; });

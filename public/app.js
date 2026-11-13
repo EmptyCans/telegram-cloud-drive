@@ -1,3 +1,4 @@
+import { createMediaPreview } from "./media-preview.js";
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
@@ -18,8 +19,7 @@ let query = "";
 let tag = "";
 let listing = 0;
 let uploading = false;
-let previewUrl;
-let previewRequest;
+
 let stopCovers;
 let draggedItem;
 let uploadTarget;
@@ -359,64 +359,8 @@ function openDocument(item, type) {
   tab.location.replace(url);
 }
 
-function clearPreview() {
-  previewRequest?.abort();
-  previewRequest = undefined;
-  const content = $("preview-content");
-  const media = content.querySelector("audio, video");
-  if (media) {
-    media.pause();
-    media.removeAttribute("src");
-    media.load();
-  }
-  content.replaceChildren();
-  if (previewUrl) URL.revokeObjectURL(previewUrl);
-  previewUrl = undefined;
-}
-
-async function preview(item, type) {
-  clearPreview();
-  const request = new AbortController();
-  previewRequest = request;
-  const dialog = $("preview-dialog");
-  const status = $("preview-status");
-  const kind = type.split("/")[0];
-  const element = document.createElement(kind === "image" ? "img" : kind);
-  if (kind === "image") {
-    element.alt = item.name;
-  } else {
-    element.controls = true;
-    element.preload = "metadata";
-    if (kind === "video") element.playsInline = true;
-  }
-  element.hidden = true;
-  element.addEventListener(kind === "image" ? "load" : "loadedmetadata", () => {
-    if (previewRequest !== request) return;
-    element.hidden = false;
-    status.textContent = "";
-  });
-  element.addEventListener("error", () => {
-    if (previewRequest !== request) return;
-    element.hidden = true;
-    status.textContent = "浏览器无法预览这个文件，请下载后打开。";
-  });
-
-  $("preview-name").textContent = item.name;
-  status.textContent = "正在加载预览…";
-  if (!dialog.open) dialog.showModal();
-  try {
-    const path = kind === "image" ? "/preview" : "/download";
-    const blob = await api(itemPath(item) + path, { signal: request.signal }, "blob");
-    if (request.signal.aborted || !dialog.open) return;
-    previewUrl = URL.createObjectURL(blob.slice(0, blob.size, type));
-    $("preview-content").append(element);
-    element.src = previewUrl;
-  } catch (error) {
-    if (error.name === "AbortError") return;
-    if (!request.signal.aborted && dialog.open) status.textContent = error.message;
-    if (!token) notice(error.message, true);
-  }
-}
+const preview = createMediaPreview($("preview-dialog"), (item, type, signal) =>
+  api(itemPath(item) + (type.startsWith("image/") ? "/preview" : "/download"), { signal }, "blob"), download);
 
 function shareExpired(item) {
   return !!item.share_expires_at && Date.parse(item.share_expires_at) <= Date.now();
@@ -562,12 +506,12 @@ async function remove(item) {
   await refresh();
 }
 
-function renderItem(item) {
+function renderItem(item, entries) {
   const folder = item.kind === "folder";
   const type = previewType(item);
   const openPreview = isDocumentPreview(type)
     ? () => openDocument(item, type)
-    : type ? () => preview(item, type) : null;
+    : type ? () => preview(item, entries) : null;
   const li = document.createElement("li");
   li.dataset.entryId = item.id;
   li.draggable = true;
@@ -725,7 +669,7 @@ async function refresh(focus = null) {
   if (query || tag) crumbs.append(" / 全局搜索");
   const entries = $("entries");
   stopCovers?.();
-  entries.replaceChildren(...result.entries.map(renderItem));
+  entries.replaceChildren(...result.entries.map(item => renderItem(item, result.entries)));
   stopCovers = observeCovers(entries, { Authorization: "Bearer " + token });
   if (focus) {
     const row = Array.from(entries.children).find((entry) => entry.dataset.entryId === focus);
@@ -899,8 +843,5 @@ $("settings-form").addEventListener("submit", action(async (event) => {
 for (const close of document.querySelectorAll("[data-close]")) {
   close.addEventListener("click", () => close.closest("dialog").close());
 }
-$("preview-dialog").addEventListener("close", () => {
-  if (!$("preview-dialog").open) clearPreview();
-});
 api("/api/config").then(applyConfig).catch((error) => notice(error.message, true));
 if (token) action(loggedIn)();
