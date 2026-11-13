@@ -300,7 +300,11 @@ input::placeholder { color: var(--placeholder); }
 .empty-mark { width: 54px; height: 54px; border-radius: 16px; }
 #pagination { justify-content: flex-end; margin-top: 16px; color: var(--muted); font-size: 13px; }
 .notifications { min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
-.notifications h2 { margin-bottom: 12px; font-size: 16px; }
+.notifications-heading { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+.notifications-heading h2 { font-size: 16px; }
+.github-project { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; color: var(--muted); }
+.github-project:hover, .github-project:focus-visible { background: var(--row-hover); color: var(--text); }
+.github-project::before { content: ""; width: 16px; height: 16px; background: currentColor; mask: url("/github-mark.svg") center / contain no-repeat; }
 #notices { display: grid; gap: 8px; max-height: 60dvh; overflow-y: auto; list-style: none; margin: 0; padding: 0; }
 #notices:not(:empty) + .no-notices { display: none; }
 #notices:empty { display: none; }
