@@ -5,7 +5,7 @@ const downloadLimit = 20 * MiB;
 const defaults = { title: "云盘", description: "", maxUploadMiB: 20 };
 const configKey = "site:config";
 const imageTypes = new Set(["image/jpeg", "image/png", "image/gif", "image/webp", "image/avif"]);
-const columns = "id, parent_id, kind, name, mime, size, tags, share_token, share_expires_at, created_at";
+const columns = "id, parent_id, kind, name, mime, size, tags, share_token, share_code, share_expires_at, created_at";
 const activeShare = "(share_expires_at IS NULL OR share_expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))";
 const shareDurations = new Set([3600, 86400, 604800, 2592000]);
 
@@ -30,6 +30,17 @@ class HttpError extends Error {
 
 function json(data, status = 200) {
   return Response.json(data, { status, headers: { "Cache-Control": "no-store" } });
+}
+
+function newShareCode() {
+  const bytes = crypto.getRandomValues(new Uint8Array(9));
+  return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_");
+}
+
+function shareRedirect(path) {
+  return new Response(null, { status: 302, headers: {
+    Location: path, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer"
+  } });
 }
 
 async function requireAdmin(request, env) {
@@ -107,6 +118,7 @@ async function database(env) {
         telegram_chat_id TEXT,
         tags TEXT NOT NULL DEFAULT '[]',
         share_token TEXT UNIQUE,
+        share_code TEXT,
         share_expires_at TEXT,
         created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
         deleted_at TEXT
@@ -114,7 +126,7 @@ async function database(env) {
       db.prepare("CREATE INDEX IF NOT EXISTS entries_parent_active ON entries(parent_id, kind, created_at DESC, id) WHERE deleted_at IS NULL")
     ]);
   } else {
-    for (const column of ["telegram_chat_id", "share_expires_at"]) {
+    for (const column of ["telegram_chat_id", "share_expires_at", "share_code"]) {
       if (fields.some(({ name }) => name === column)) continue;
       try {
         await db.prepare(`ALTER TABLE entries ADD COLUMN ${column} TEXT`).run();
@@ -123,6 +135,7 @@ async function database(env) {
       }
     }
   }
+  await db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS entries_share_code ON entries(share_code) WHERE share_code IS NOT NULL").run();
   return db;
 }
 
@@ -337,9 +350,10 @@ async function updateEntry(db, id, body) {
     const expires = duration ? new Date(Date.now() + duration * 1000).toISOString() : null;
     const item = await db.prepare(`UPDATE entries
       SET share_token = CASE WHEN ?1 THEN coalesce(share_token, ?2) ELSE NULL END,
+          share_code = CASE WHEN ?1 THEN coalesce(share_code, ?6) ELSE NULL END,
           share_expires_at = CASE WHEN NOT ?1 THEN NULL WHEN ?3 THEN ?4 ELSE share_expires_at END
-      WHERE id = ?5 AND deleted_at IS NULL RETURNING share_token, share_expires_at`)
-      .bind(Number(body.share), crypto.randomUUID().replaceAll("-", ""), Number(duration !== undefined), expires, id).first();
+      WHERE id = ?5 AND deleted_at IS NULL RETURNING share_token, share_code, share_expires_at`)
+      .bind(Number(body.share), crypto.randomUUID().replaceAll("-", ""), Number(duration !== undefined), expires, id, newShareCode()).first();
     if (!item) throw new HttpError(404, "项目不存在");
     return json(item);
   }
@@ -370,7 +384,7 @@ async function removeEntry(db, id, env, legacyMode) {
   const legacy = `SELECT 1 FROM entries JOIN descendants USING (id)
     WHERE kind = 'file' AND telegram_chat_id IS NULL AND telegram_message_id IS NOT NULL`;
   const { results } = await db.prepare(`${tree}
-    UPDATE entries SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), share_token = NULL, share_expires_at = NULL
+    UPDATE entries SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), share_token = NULL, share_code = NULL, share_expires_at = NULL
     WHERE id IN (SELECT id FROM descendants)
       AND (? OR NOT EXISTS (${legacy}))
     RETURNING kind, telegram_chat_id, telegram_message_id, created_at`)
@@ -439,6 +453,16 @@ async function handle(request, env) {
   const { method } = request;
   if (pathname === "/api/config" && method === "GET") return json(await getConfig(env));
   if (pathname === "/api/health" && method === "GET") return json({ status: "ok" });
+  const shortShare = pathname.match(/^\/s\/([a-zA-Z0-9_-]{12})$/);
+  if (shortShare && (method === "GET" || method === "HEAD")) {
+    const db = await database(env);
+    const item = await db.prepare(`SELECT kind, name, mime, share_token FROM entries
+      WHERE share_code = ? AND share_token IS NOT NULL AND deleted_at IS NULL AND ${activeShare}`)
+      .bind(shortShare[1]).first();
+    if (!item) throw new HttpError(404, "分享链接已失效");
+    if (item.kind === "folder") return shareRedirect("/inbox#" + item.share_token);
+    return shareRedirect("/f/" + item.share_token + (previewType(item) ? "/preview" : ""));
+  }
   const shared = pathname.match(/^\/f\/([a-f0-9]{32})(\/preview)?$/);
   if (shared && method === "GET") return content(await database(env), env, "share_token", shared[1], !!shared[2]);
   const inboxFile = pathname.match(/^\/api\/inbox\/([a-f0-9]{32})\/([a-f0-9-]{36})\/download$/);
@@ -465,7 +489,7 @@ async function handle(request, env) {
   const db = await database(env);
   if (pathname === "/api/links" && method === "GET") {
     const offset = Math.max(0, Number.parseInt(url.searchParams.get("offset"), 10) || 0);
-    const { results } = await db.prepare(`SELECT id, parent_id, name, kind, mime, share_token, share_expires_at
+    const { results } = await db.prepare(`SELECT id, parent_id, name, kind, mime, share_token, share_code, share_expires_at
       FROM entries WHERE share_token IS NOT NULL AND deleted_at IS NULL
       ORDER BY name COLLATE NOCASE, id LIMIT 51 OFFSET ?`).bind(offset).all();
     return json({ links: results.slice(0, 50), hasMore: results.length > 50 });
@@ -484,6 +508,18 @@ async function handle(request, env) {
     return createEntry(db, { parent, kind: "folder", name: validName(body?.name) });
   }
   if (pathname === "/api/upload" && method === "POST") return upload(request, db, env, url);
+  const shortLink = pathname.match(/^\/api\/entries\/([a-f0-9-]{36})\/short-link$/);
+  if (shortLink && method === "POST") {
+    const { token } = await bodyJson(request) ?? {};
+    if (typeof token !== "string" || !/^[a-f0-9]{32}$/.test(token)) {
+      throw new HttpError(400, "分享链接无效");
+    }
+    const item = await db.prepare(`UPDATE entries SET share_code = coalesce(share_code, ?1)
+      WHERE id = ?2 AND share_token = ?3 AND deleted_at IS NULL AND ${activeShare} RETURNING share_code`)
+      .bind(newShareCode(), shortLink[1], token).first();
+    if (!item) throw new HttpError(404, "分享链接已失效");
+    return json(item);
+  }
   const entry = pathname.match(/^\/api\/entries\/([a-f0-9-]{36})(\/(?:preview|download))?$/);
   if (entry) {
     if (entry[2] && method === "GET") return content(db, env, "id", entry[1], entry[2] === "/preview");

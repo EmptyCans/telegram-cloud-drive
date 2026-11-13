@@ -7,5 +7,10 @@ export function formatEntrySize(bytes) {
 
 export function formatEntryKind(item) {
   if (item.kind === "folder") return "文件夹";
-  return item.name.match(/\.([a-z\d]+)$/i)?.[1].toUpperCase() ?? "文件";
+  return entryExtension(item.name)?.toUpperCase() ?? "文件";
+}
+
+export function entryExtension(name) {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 && dot < name.length - 1 ? name.slice(dot + 1) : null;
 }

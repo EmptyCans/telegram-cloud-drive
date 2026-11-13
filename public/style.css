@@ -175,11 +175,21 @@ input::placeholder { color: var(--placeholder); }
   display: flex; flex-direction: column; justify-content: flex-start; gap: 8px;
   min-width: 0; padding: 8px 10px 12px; border: 1px solid var(--border); border-radius: 10px;
 }
-#entries.entries-grid .actions { order: -1; align-self: flex-end; }
+.entry-extension { display: none; }
+#entries.entries-grid .actions { order: -1; align-self: stretch; justify-content: flex-end; gap: 4px; }
+#entries.entries-grid .entry-extension {
+  display: block; min-width: 0; margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--muted); background: var(--list-heading); border-radius: 5px; padding: 2px 4px; font-size: 11px;
+}
+#entries.entries-grid .actions > :is(button, details) { flex: none; }
+#entries.entries-grid .actions :is(button, summary) { padding-inline: 7px; }
 #entries.entries-grid .file-tile { width: min(100%, 128px); height: 76px; flex: none; }
 #entries.entries-grid .folder-tile .icon { width: 30px; height: 30px; }
 #entries.entries-grid .entry-name { display: flex; flex: 1; flex-direction: column; align-items: center; width: 100%; text-align: center; }
 #entries.entries-grid .entry-title { text-align: center; }
+:is(#entries.entries-grid .entry-title > span, .inbox-grid:not(.inbox-list) .inbox-name) {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
 #entries.entries-grid .entry-meta { justify-content: center; width: 100%; margin-top: auto; padding-top: 6px; }
 #entries.entries-grid .entry-meta time { order: 1; flex-basis: 100%; }
 .file-tile { width: 48px; height: 38px; border-radius: 10px; }
