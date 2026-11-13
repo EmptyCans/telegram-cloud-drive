@@ -527,6 +527,10 @@ dialog.media-preview { width: calc(100% - 24px); max-width: 1440px; height: calc
   :is(.sidebar, #file-view, .inbox-panel, .notifications) > :is(.directory-scroll, .file-scroll, #notices, #inbox-status) { flex: 1 1 auto; }
   #notices { max-height: none; align-content: start; }
   #links-view { overflow: auto; }
-  #entries-heading, .inbox-list-heading { position: sticky; top: 0; z-index: 1; }
+  #drop-zone { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; }
+  #entries-heading { flex: none; overflow: hidden; scrollbar-gutter: stable; }
+  #drop-zone > .file-scroll { border-radius: 0 0 12px 12px; }
+  #drop-zone:has(.entries-grid) > .file-scroll { border-radius: 12px; }
+  .inbox-list-heading { position: sticky; top: 0; z-index: 1; }
   .file-scroll { scrollbar-gutter: stable; }
 }
