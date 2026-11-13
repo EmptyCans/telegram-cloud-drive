@@ -464,7 +464,13 @@ async function publicFolder(request, db, env, url, code, root) {
   const folder = id === root.id ? root : await db.prepare(`SELECT id, name, parent_id FROM entries
     WHERE id = ?1 AND ${inboxContains("?1", "?2")}`).bind(id, code).first();
   if (!folder) throw new HttpError(404, "文件夹不存在或已移出公开范围");
-  if (request.method === "POST") return upload(request, db, env, url, { id, code });
+  if (request.method === "POST") {
+    if (url.searchParams.get("action") === "mkdir") {
+      const body = await bodyJson(request);
+      return createEntry(db, { parent: id, kind: "folder", name: validName(body?.name), inboxCode: code });
+    }
+    return upload(request, db, env, url, { id, code });
+  }
 
   const offset = Math.max(0, Math.min(1000000, Number.parseInt(url.searchParams.get("offset"), 10) || 0));
   const { results } = await db.prepare(`SELECT id, kind, name, mime, size, created_at FROM entries

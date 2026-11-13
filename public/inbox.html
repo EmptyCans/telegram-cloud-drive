@@ -25,11 +25,16 @@
       </div>
       <form id="inbox-form" hidden>
         <div>
-          <strong>拖放或粘贴文件到这里上传</strong>
+          <strong>拖放文件或文件夹，也可粘贴文件上传</strong>
           <p id="inbox-limit"></p>
         </div>
         <input id="inbox-files" type="file" multiple hidden>
-        <button id="inbox-submit" class="primary" type="button">上传文件</button>
+        <input id="inbox-directory" type="file" webkitdirectory multiple hidden>
+        <div class="row">
+          <button id="inbox-mkdir" type="button">新建文件夹</button>
+          <button id="inbox-choose-directory" type="button">上传文件夹</button>
+          <button id="inbox-submit" class="primary" type="button">上传文件</button>
+        </div>
       </form>
       <div id="inbox-progress" class="upload-progress" hidden>
         <span></span><progress max="100" aria-label="文件上传进度"></progress>

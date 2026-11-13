@@ -3,6 +3,35 @@ export function pastedFiles(event) {
   return Array.from(event.clipboardData?.files ?? []);
 }
 
+export async function droppedItems(transfer) {
+  async function read(entry, path) {
+    if (entry.isFile) {
+      const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+      return [{ file, path }];
+    }
+    if (!entry.isDirectory) return [];
+    const directory = [...path, entry.name];
+    const items = [{ path: directory }];
+    const reader = entry.createReader();
+    while (true) {
+      const batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+      if (!batch.length) return items;
+      for (const child of batch) items.push(...await read(child, directory));
+    }
+  }
+
+  const items = Array.from(transfer.items).filter(item => item.kind === "file");
+  const files = Array.from(transfer.files);
+  if (!items.length) return files.map(file => ({ file, path: [] }));
+  const tasks = items.map((item, index) => {
+    const entry = item.webkitGetAsEntry?.();
+    if (entry) return read(entry, []);
+    const file = item.getAsFile() ?? files[index];
+    return file ? [{ file, path: [] }] : [];
+  });
+  return (await Promise.all(tasks)).flat();
+}
+
 export function uploadFile(path, file, headers, update) {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();

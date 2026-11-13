@@ -4,7 +4,7 @@ import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
 import { entryDateFormat, formatEntryKind, formatEntrySize } from "./entry-format.js";
 import { bindViewSwitch } from "./view-switch.js";
-import { pastedFiles, showUploadProgress, uploadFile } from "./uploads.js";
+import { droppedItems, pastedFiles, showUploadProgress, uploadFile } from "./uploads.js";
 
 const $ = (id) => document.getElementById(id);
 const code = location.pathname.match(/^\/s\/([a-zA-Z0-9_-]{12})$/)?.[1];
@@ -13,6 +13,9 @@ const form = $("inbox-form");
 const panel = $("inbox-panel");
 const input = $("inbox-files");
 const submit = $("inbox-submit");
+const directoryInput = $("inbox-directory");
+const chooseDirectory = $("inbox-choose-directory");
+const mkdir = $("inbox-mkdir");
 const status = $("inbox-status");
 const endpoint = "/api/inbox/" + code;
 const pageSize = 50;
@@ -33,9 +36,9 @@ function folderAddress(id) {
   return url.href;
 }
 
-function folderQuery(fields) {
+function folderQuery(fields, target = folder) {
   const params = new URLSearchParams(fields);
-  if (folder) params.set("folder", folder);
+  if (target) params.set("folder", target);
   return endpoint + "?" + params;
 }
 
@@ -169,41 +172,108 @@ function folderError(error) {
   }
 }
 
-async function uploadFiles(files) {
-  if (!files.length || form.hidden || submit.disabled) return;
-  input.disabled = submit.disabled = true;
+async function createFolder(name, target = folder) {
+  const response = await request(folderQuery({ action: "mkdir" }, target), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name })
+  });
+  return (await response.json()).id;
+}
+
+function setUploadBusy(busy) {
+  input.disabled = directoryInput.disabled = submit.disabled = chooseDirectory.disabled = mkdir.disabled = busy;
+}
+
+async function uploadItems(items) {
+  if (form.hidden || submit.disabled) return;
+  setUploadBusy(true);
   const progress = $("inbox-progress");
   status.textContent = "";
   let completed = 0;
+  let index = 0;
+  let created = 0;
   const failures = [];
+  const directories = new Map();
+  async function ensurePath(path) {
+    let target = folder;
+    for (const [depth, name] of path.entries()) {
+      const key = JSON.stringify(path.slice(0, depth + 1));
+      if (!directories.has(key)) {
+        const id = await createFolder(name, target);
+        directories.set(key, id);
+        created += 1;
+      }
+      target = directories.get(key);
+    }
+    return target;
+  }
   try {
-    for (const [index, file] of files.entries()) {
+    items = await items;
+    const total = items.filter(item => item.file).length;
+    for (const { file, path } of items) {
       try {
+        if (!file) {
+          await ensurePath(path);
+          continue;
+        }
+        const position = index++;
         if (!file.size || file.size > maxUploadMiB * 1024 * 1024) {
           throw new Error("文件必须大于 0 字节且不超过 " + maxUploadMiB + " MiB");
         }
-        const update = showUploadProgress(progress, file, index, files.length);
-        await uploadFile(folderQuery({ name: file.name }), file, {}, update);
+        const target = await ensurePath(path);
+        const update = showUploadProgress(progress, file, position, total);
+        await uploadFile(folderQuery({ name: file.name }, target), file, {}, update);
         completed += 1;
       } catch (error) {
-        failures.push(file.name + " · " + error.message);
+        failures.push([...path, ...(file ? [file.name] : [])].join("/") + " · " + error.message);
         if (error.status === 404) {
           folderError(error);
           break;
         }
       }
     }
-    status.textContent = ["已上传 " + completed + "/" + files.length + " 个文件", ...failures].join("\n");
-    input.value = "";
-    if (completed && !form.hidden) await loadFolder().catch(folderError);
+    const summary = ["已上传 " + completed + "/" + total + " 个文件"];
+    if (created) summary.push("已创建 " + created + " 个文件夹");
+    status.textContent = [...summary, ...failures].join("\n");
+    if ((completed || created) && !form.hidden) await loadFolder().catch(folderError);
+  } catch (error) {
+    folderError(error);
   } finally {
+    input.value = directoryInput.value = "";
     progress.hidden = true;
-    input.disabled = submit.disabled = false;
+    setUploadBusy(false);
   }
+}
+
+function uploadFiles(files) {
+  if (files.length) void uploadItems(files.map(file => ({ file, path: [] })));
 }
 
 submit.addEventListener("click", () => input.click());
 input.addEventListener("change", () => uploadFiles(Array.from(input.files)));
+chooseDirectory.hidden = !("webkitdirectory" in directoryInput);
+chooseDirectory.addEventListener("click", () => directoryInput.click());
+directoryInput.addEventListener("change", () => {
+  const items = Array.from(directoryInput.files, file => ({
+    file, path: file.webkitRelativePath.split("/").slice(0, -1)
+  }));
+  if (items.length) void uploadItems(items);
+});
+mkdir.addEventListener("click", async () => {
+  const name = prompt("文件夹名称")?.trim();
+  if (!name) return;
+  setUploadBusy(true);
+  try {
+    await createFolder(name);
+    status.textContent = "已创建文件夹「" + name + "」";
+    await loadFolder();
+  } catch (error) {
+    folderError(error);
+  } finally {
+    setUploadBusy(false);
+  }
+});
 form.addEventListener("submit", (event) => event.preventDefault());
 document.addEventListener("paste", (event) => {
   if (form.hidden || $("inbox-preview").open) return;
@@ -231,7 +301,9 @@ window.addEventListener("drop", (event) => {
   if (!isFileDrag(event)) return;
   event.preventDefault();
   form.classList.remove("inbox-dragging");
-  if (!$("inbox-preview").open) uploadFiles(Array.from(event.dataTransfer.files));
+  if (!form.hidden && !submit.disabled && !$("inbox-preview").open) {
+    void uploadItems(droppedItems(event.dataTransfer));
+  }
 });
 
 $("inbox-previous").addEventListener("click", () => {
