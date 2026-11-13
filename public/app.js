@@ -101,6 +101,7 @@ function loggedOut() {
   folders = [];
   folderIndex.clear();
   expandedFolders.clear();
+  setBranchExpanded($("root-toggle"), $("folder-tree"), "", true);
   page = 0;
   query = tag = "";
   $("search").reset();
@@ -159,6 +160,7 @@ async function openFolder(folder) {
   if (location.hash === "#links") location.hash = "";
   const path = folderPath(folder.id);
   folders = path.length ? path : [folder];
+  setBranchExpanded($("root-toggle"), $("folder-tree"), "", true);
   resetFilters();
   await refresh();
 }
@@ -784,7 +786,11 @@ $("share-form").addEventListener("submit", action(async (event) => {
   }
 }));
 $("go-root").addEventListener("click", action(goRoot));
-moveTarget($("go-root"), null, "根目录");
+$("root-toggle").addEventListener("click", () => {
+  const branch = $("folder-tree");
+  setBranchExpanded($("root-toggle"), branch, "", branch.hidden);
+});
+moveTarget($("go-root").parentElement, null, "根目录");
 document.addEventListener("click", (event) => {
   for (const menu of document.querySelectorAll(".actions details[open]")) {
     if (!menu.contains(event.target)) menu.open = false;
