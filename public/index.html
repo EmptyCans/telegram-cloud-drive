@@ -44,9 +44,11 @@
           <h2>文件</h2>
           <div class="row">
             <button id="new-folder"><span aria-hidden="true">＋</span> 新建目录</button>
+            <button id="choose-directory" type="button">上传文件夹</button>
             <button id="choose-files" class="primary"><span aria-hidden="true">↑</span> 上传文件</button>
           </div>
           <input id="file-input" type="file" multiple hidden>
+          <input id="directory-input" type="file" webkitdirectory multiple hidden>
         </div>
         <div id="upload-progress" class="upload-progress" hidden>
           <span></span><progress max="100" aria-label="文件上传进度"></progress>

@@ -4,7 +4,7 @@ import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
 import { entryDateFormat, formatEntryKind, formatEntrySize } from "./entry-format.js";
 import { bindViewSwitch } from "./view-switch.js";
-import { droppedItems, pastedFiles, showUploadProgress, uploadFile } from "./uploads.js";
+import { droppedItems, pastedFiles, selectedDirectoryItems, showUploadProgress, uploadDirectories, uploadFile } from "./uploads.js";
 
 const $ = (id) => document.getElementById(id);
 const code = location.pathname.match(/^\/s\/([a-zA-Z0-9_-]{12})$/)?.[1];
@@ -194,20 +194,11 @@ async function uploadItems(items) {
   let index = 0;
   let created = 0;
   const failures = [];
-  const directories = new Map();
-  async function ensurePath(path) {
-    let target = folder;
-    for (const [depth, name] of path.entries()) {
-      const key = JSON.stringify(path.slice(0, depth + 1));
-      if (!directories.has(key)) {
-        const id = await createFolder(name, target);
-        directories.set(key, id);
-        created += 1;
-      }
-      target = directories.get(key);
-    }
-    return target;
-  }
+  const ensurePath = uploadDirectories(folder, async (name, target) => {
+    const id = await createFolder(name, target);
+    created += 1;
+    return id;
+  });
   try {
     items = await items;
     const total = items.filter(item => item.file).length;
@@ -255,9 +246,7 @@ input.addEventListener("change", () => uploadFiles(Array.from(input.files)));
 chooseDirectory.hidden = !("webkitdirectory" in directoryInput);
 chooseDirectory.addEventListener("click", () => directoryInput.click());
 directoryInput.addEventListener("change", () => {
-  const items = Array.from(directoryInput.files, file => ({
-    file, path: file.webkitRelativePath.split("/").slice(0, -1)
-  }));
+  const items = selectedDirectoryItems(directoryInput.files);
   if (items.length) void uploadItems(items);
 });
 mkdir.addEventListener("click", async () => {

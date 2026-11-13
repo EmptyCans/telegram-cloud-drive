@@ -4,7 +4,7 @@ import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
 import { entryDateFormat, entryExtension, formatEntryKind, formatEntrySize } from "./entry-format.js";
 import { bindViewSwitch } from "./view-switch.js";
-import { pastedFiles, showUploadProgress, uploadFile } from "./uploads.js";
+import { droppedItems, pastedFiles, selectedDirectoryItems, showUploadProgress, uploadDirectories, uploadFile } from "./uploads.js";
 
 const $ = (id) => document.getElementById(id);
 const MiB = 1024 * 1024;
@@ -685,39 +685,62 @@ async function refresh(focus = null) {
   $("page").textContent = "第 " + (page + 1) + " 页";
 }
 
-async function upload(files, parent = currentFolder()) {
-  if (!token || !files.length) return;
+function upload(files) {
+  if (files.length) return uploadItems(files.map(file => ({ file, path: [] })));
+}
+
+async function uploadItems(items, parent = currentFolder()) {
+  if (!token) return;
   if (uploading) {
     notice("正在上传其他文件，请等待当前批次完成。");
     return;
   }
   uploading = true;
-  $("choose-files").disabled = true;
+  $("choose-files").disabled = $("choose-directory").disabled = true;
   const failures = [];
   let completed = 0;
+  let created = 0;
+  let index = 0;
   const progress = $("upload-progress");
+  const ensurePath = uploadDirectories(parent, async (name, target) => {
+    const { id } = await api("/api/folders", { method: "POST", json: { name, parent: target || null } });
+    created += 1;
+    return id;
+  });
   try {
-    for (const [index, file] of files.entries()) {
+    items = await items;
+    if (!items.length) return;
+    const total = items.filter(item => item.file).length;
+    for (const { file, path } of items) {
       try {
+        if (!file) {
+          await ensurePath(path);
+          continue;
+        }
+        const position = index++;
         if (!file.size || file.size > config.maxUploadMiB * MiB) {
           throw new Error("文件必须大于 0 字节且不超过 " + config.maxUploadMiB + " MiB");
         }
-        const params = new URLSearchParams({ parent, name: file.name });
-        const updateProgress = showUploadProgress(progress, file, index, files.length);
+        const target = await ensurePath(path);
+        const params = new URLSearchParams({ parent: target, name: file.name });
+        const updateProgress = showUploadProgress(progress, file, position, total);
         await uploadFile("/api/upload?" + params, file, { Authorization: "Bearer " + token }, updateProgress);
         completed += 1;
       } catch (error) {
         if (error.status === 401) loggedOut();
-        failures.push(file.name + " · " + error.message);
+        failures.push([...path, ...(file ? [file.name] : [])].join("/") + " · " + error.message);
         if (!token) throw error;
       }
     }
-    if (token) await refresh();
-    notice(["已上传 " + completed + "/" + files.length + " 个文件", ...failures].join("\n"), failures.length > 0);
+    if (created) await loadFolderTree();
+    if (completed || created) await refresh();
+    const summary = ["已上传 " + completed + "/" + total + " 个文件"];
+    if (created) summary.push("已创建 " + created + " 个文件夹");
+    notice([...summary, ...failures].join("\n"), failures.length > 0);
   } finally {
     progress.hidden = true;
     uploading = false;
-    $("choose-files").disabled = false;
+    $("choose-files").disabled = $("choose-directory").disabled = false;
   }
 }
 
@@ -794,6 +817,14 @@ $("new-folder").addEventListener("click", action(async () => {
 $("previous").addEventListener("click", action(async () => { page -= 1; await refresh(); }));
 $("next").addEventListener("click", action(async () => { page += 1; await refresh(); }));
 $("choose-files").addEventListener("click", () => $("file-input").click());
+const directoryInput = $("directory-input");
+$("choose-directory").hidden = !("webkitdirectory" in directoryInput);
+$("choose-directory").addEventListener("click", () => directoryInput.click());
+directoryInput.addEventListener("change", action(async () => {
+  const items = selectedDirectoryItems(directoryInput.files);
+  directoryInput.value = "";
+  if (items.length) await uploadItems(items);
+}));
 $("file-input").addEventListener("change", action(async (event) => {
   const files = Array.from(event.target.files);
   event.target.value = "";
@@ -824,7 +855,8 @@ $("manager").addEventListener("drop", action(async (event) => {
   event.preventDefault();
   showUploadTarget(undefined);
   const parent = folderUnderPointer(event)?.dataset.uploadParent ?? currentFolder();
-  await upload(Array.from(event.dataTransfer.files), parent);
+  if (uploading || !token) return;
+  await uploadItems(droppedItems(event.dataTransfer), parent);
 }));
 $("settings").addEventListener("click", () => {
   const form = $("settings-form");

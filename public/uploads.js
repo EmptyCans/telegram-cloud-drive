@@ -32,6 +32,23 @@ export async function droppedItems(transfer) {
   return (await Promise.all(tasks)).flat();
 }
 
+export function selectedDirectoryItems(files) {
+  return Array.from(files, file => ({ file, path: file.webkitRelativePath.split("/").slice(0, -1) }));
+}
+
+export function uploadDirectories(parent, createFolder) {
+  const directories = new Map();
+  return async function ensurePath(path) {
+    let target = parent;
+    for (const [depth, name] of path.entries()) {
+      const key = JSON.stringify(path.slice(0, depth + 1));
+      if (!directories.has(key)) directories.set(key, await createFolder(name, target));
+      target = directories.get(key);
+    }
+    return target;
+  };
+}
+
 export function uploadFile(path, file, headers, update) {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
