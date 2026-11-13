@@ -3,6 +3,7 @@ import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
 import { entryDateFormat, formatEntryKind, formatEntrySize } from "./entry-format.js";
 import { bindViewSwitch } from "./view-switch.js";
+import { pastedFiles, showUploadProgress, uploadFile } from "./uploads.js";
 
 const $ = (id) => document.getElementById(id);
 const code = location.pathname.match(/^\/s\/([a-zA-Z0-9_-]{12})$/)?.[1];
@@ -206,20 +207,18 @@ function folderError(error) {
 async function uploadFiles(files) {
   if (!files.length || form.hidden || submit.disabled) return;
   input.disabled = submit.disabled = true;
+  const progress = $("inbox-progress");
+  status.textContent = "";
   let completed = 0;
   const failures = [];
   try {
     for (const [index, file] of files.entries()) {
-      status.textContent = "正在上传 " + (index + 1) + "/" + files.length + " · " + file.name;
       try {
         if (!file.size || file.size > maxUploadMiB * 1024 * 1024) {
           throw new Error("文件必须大于 0 字节且不超过 " + maxUploadMiB + " MiB");
         }
-        await request(folderQuery({ name: file.name }), {
-          method: "POST",
-          headers: { "Content-Type": file.type || "application/octet-stream" },
-          body: file
-        });
+        const update = showUploadProgress(progress, file, index, files.length);
+        await uploadFile(folderQuery({ name: file.name }), file, {}, update);
         completed += 1;
       } catch (error) {
         failures.push(file.name + " · " + error.message);
@@ -233,6 +232,7 @@ async function uploadFiles(files) {
     input.value = "";
     if (completed && !form.hidden) await loadFolder().catch(folderError);
   } finally {
+    progress.hidden = true;
     input.disabled = submit.disabled = false;
   }
 }
@@ -240,6 +240,13 @@ async function uploadFiles(files) {
 submit.addEventListener("click", () => input.click());
 input.addEventListener("change", () => uploadFiles(Array.from(input.files)));
 form.addEventListener("submit", (event) => event.preventDefault());
+document.addEventListener("paste", (event) => {
+  if (form.hidden || $("inbox-preview").open) return;
+  const files = pastedFiles(event);
+  if (!files.length) return;
+  event.preventDefault();
+  void uploadFiles(files);
+});
 
 function isFileDrag(event) {
   return event.dataTransfer?.types.includes("Files");

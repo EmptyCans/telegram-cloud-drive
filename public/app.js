@@ -3,6 +3,7 @@ import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
 import { entryDateFormat, entryExtension, formatEntryKind, formatEntrySize } from "./entry-format.js";
 import { bindViewSwitch } from "./view-switch.js";
+import { pastedFiles, showUploadProgress, uploadFile } from "./uploads.js";
 
 const $ = (id) => document.getElementById(id);
 const MiB = 1024 * 1024;
@@ -733,7 +734,7 @@ async function refresh(focus = null) {
     row?.querySelector(".entry-title").focus({ preventScroll: true });
   }
   $("empty").hidden = result.entries.length > 0;
-  $("empty-message").textContent = query || tag ? "没有符合条件的项目。" : "将文件拖到这里，或点击「上传文件」。";
+  $("empty-message").textContent = query || tag ? "没有符合条件的项目。" : "拖放或粘贴文件，或点击「上传文件」。";
   $("pagination").hidden = !page && !result.hasMore;
   $("previous").disabled = page === 0;
   $("next").disabled = !result.hasMore;
@@ -750,18 +751,19 @@ async function upload(files, parent = currentFolder()) {
   $("choose-files").disabled = true;
   const failures = [];
   let completed = 0;
-  let progress;
+  const progress = $("upload-progress");
   try {
     for (const [index, file] of files.entries()) {
-      progress = notice("正在上传 " + (index + 1) + "/" + files.length + " · " + file.name, false, progress);
       try {
         if (!file.size || file.size > config.maxUploadMiB * MiB) {
           throw new Error("文件必须大于 0 字节且不超过 " + config.maxUploadMiB + " MiB");
         }
         const params = new URLSearchParams({ parent, name: file.name });
-        await api("/api/upload?" + params, { method: "POST", body: file });
+        const updateProgress = showUploadProgress(progress, file, index, files.length);
+        await uploadFile("/api/upload?" + params, file, { Authorization: "Bearer " + token }, updateProgress);
         completed += 1;
       } catch (error) {
+        if (error.status === 401) loggedOut();
         failures.push(file.name + " · " + error.message);
         if (!token) throw error;
       }
@@ -769,11 +771,19 @@ async function upload(files, parent = currentFolder()) {
     if (token) await refresh();
     notice(["已上传 " + completed + "/" + files.length + " 个文件", ...failures].join("\n"), failures.length > 0);
   } finally {
-    progress?.remove();
+    progress.hidden = true;
     uploading = false;
     $("choose-files").disabled = false;
   }
 }
+
+document.addEventListener("paste", action(async (event) => {
+  if ($("manager").hidden || $("file-view").hidden || document.querySelector("dialog[open]")) return;
+  const files = pastedFiles(event);
+  if (!files.length) return;
+  event.preventDefault();
+  await upload(files);
+}));
 
 $("login").addEventListener("submit", action(async (event) => {
   event.preventDefault();
