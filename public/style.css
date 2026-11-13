@@ -396,7 +396,10 @@ dialog.media-preview { width: calc(100% - 24px); max-width: 1440px; height: calc
 .media-header .row { flex: none; flex-wrap: nowrap; }
 .media-header button { padding: 5px 9px; font-size: 12px; }
 .media-stage { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: clamp(4px, 1vw, 14px); min-height: 0; padding: 12px clamp(6px, 1vw, 16px); background: var(--list-heading); }
-.media-stage > button { z-index: 1; width: clamp(30px, 4vw, 44px); aspect-ratio: 1; padding: 0; border: 0; border-radius: 50%; background: #4c5566; color: white; font-size: 23px; line-height: 1; }
+.media-stage > button { z-index: 1; display: grid; place-items: center; width: clamp(30px, 4vw, 44px); aspect-ratio: 1; padding: 0; border: 0; border-radius: 50%; background: #4c5566; color: white; }
+.media-stage > button::before { content: ""; width: 7px; height: 12px; background: currentColor; clip-path: polygon(0 0, 27% 0, 100% 50%, 27% 100%, 0 100%, 73% 50%); }
+.media-stage [data-previous] { grid-column: 1; grid-row: 1; }
+.media-stage [data-previous]::before { transform: scaleX(-1); }
 .media-stage > button:disabled { opacity: .35; }
 .media-stage [data-next] { grid-column: 3; grid-row: 1; }
 .media-stage #preview-status { position: absolute; inset: auto 15% 10px; text-align: center; font-size: 13px; overflow-wrap: anywhere; pointer-events: none; }
