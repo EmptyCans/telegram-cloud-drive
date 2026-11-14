@@ -49,7 +49,7 @@ export function uploadDirectories(parent, createFolder) {
   };
 }
 
-export function uploadFile(path, file, headers, update) {
+export function uploadFile(path, file, headers, update, translate = null) {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open("POST", path);
@@ -64,22 +64,27 @@ export function uploadFile(path, file, headers, update) {
         resolve();
         return;
       }
-      reject(Object.assign(new Error(request.response?.error ?? "上传失败（" + request.status + "）"), { status: request.status }));
+      const message = translate
+        ? translate("上传失败（{status}）", { status: request.status })
+        : request.response?.error ?? "上传失败（" + request.status + "）";
+      reject(Object.assign(new Error(message), { status: request.status }));
     });
-    request.addEventListener("error", () => reject(new Error("网络连接失败，请重试。")));
-    request.addEventListener("abort", () => reject(new Error("上传已中断。")));
+    request.addEventListener("error", () => reject(new Error(translate?.("网络连接失败，请重试。") ?? "网络连接失败，请重试。")));
+    request.addEventListener("abort", () => reject(new Error(translate?.("上传已中断。") ?? "上传已中断。")));
     request.responseType = "json";
     request.send(file);
   });
 }
 
-export function showUploadProgress(panel, file, index, total) {
+export function showUploadProgress(panel, file, index, total, translate = null) {
   const label = panel.querySelector("span");
   const bar = panel.querySelector("progress");
   const name = (index + 1) + "/" + total + " · " + file.name;
   function update(percent) {
     bar.value = percent;
-    label.textContent = percent === 100 ? "正在保存 · " + name : "正在上传 " + percent + "% · " + name;
+    label.textContent = translate
+      ? translate(percent === 100 ? "正在保存 · {name}" : "正在上传 {percent}% · {name}", { name, percent })
+      : percent === 100 ? "正在保存 · " + name : "正在上传 " + percent + "% · " + name;
   }
   update(0);
   panel.hidden = false;

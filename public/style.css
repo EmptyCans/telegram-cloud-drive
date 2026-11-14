@@ -533,11 +533,11 @@ dialog.media-preview { width: calc(100% - 24px); max-width: 1440px; height: calc
 .inbox-notifications:has(#inbox-progress:not([hidden])) .inbox-no-notices { display: none; }
 
 @media (min-width: 1061px) {
-  body:has(#manager:not([hidden])) { display: flex; flex-direction: column; height: 100dvh; }
-  body:has(#manager:not([hidden])) > main { flex: 1; min-height: 0; }
+  body:is(.inbox-page, :has(#manager:not([hidden]))) { display: flex; flex-direction: column; height: 100dvh; }
+  body:is(.inbox-page, :has(#manager:not([hidden]))) > main { flex: 1; min-height: 0; }
   #manager, .inbox-layout { grid-template-columns: 184px minmax(0, 1fr) minmax(200px, 240px); grid-template-rows: minmax(0, 1fr) auto; gap: 10px 20px; align-items: stretch; }
   #manager { height: 100%; }
-  .inbox-layout { height: calc(100dvh - 2 * clamp(20px, 4vw, 48px)); }
+  .inbox-layout { height: 100%; }
   .inbox-layout:has(#inbox-sidebar[hidden]) { grid-template-columns: minmax(0, 1fr) minmax(200px, 240px); }
   #manager > :is(.sidebar, .workspace, .notifications), .inbox-layout > * { min-height: 0; }
   #manager > .sidebar, .inbox-layout > .sidebar { max-height: none; overflow: hidden; display: flex; flex-direction: column; }

@@ -2,11 +2,14 @@ import { createMediaPreview } from "./media-preview.js";
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
-import { entryDateFormat, formatEntryKind, formatEntrySize } from "./entry-format.js";
+import { formatEntryKind, formatEntrySize } from "./entry-format.js";
+import { language, localizeInbox, translate } from "./inbox-i18n.js";
 import { bindViewSwitch } from "./view-switch.js";
 import { droppedItems, pastedFiles, selectedDirectoryItems, showUploadProgress, uploadDirectories, uploadFile } from "./uploads.js";
 
 const $ = (id) => document.getElementById(id);
+localizeInbox();
+const entryDateFormat = new Intl.DateTimeFormat(document.documentElement.lang, { dateStyle: "medium", timeStyle: "short" });
 const code = location.pathname.match(/^\/s\/([a-zA-Z0-9_-]{12})$/)?.[1];
 let folder = new URLSearchParams(location.search).get("folder");
 const form = $("inbox-form");
@@ -52,7 +55,7 @@ async function request(path, options) {
   if (!response.ok) {
     const { error } = await response.json().catch(() => ({}));
     const fallback = response.status === 413 ? "文件超过上传限制。" : "请求失败，请稍后重试。";
-    throw Object.assign(new Error(error ?? fallback), { status: response.status });
+    throw Object.assign(new Error(translate(language === "zh" ? error ?? fallback : fallback)), { status: response.status });
   }
   return response;
 }
@@ -75,7 +78,7 @@ async function downloadFile(item) {
 }
 
 const preview = createMediaPreview($("inbox-preview"), async (item, _type, signal) =>
-  (await request(fileAddress(item), { signal })).blob(), downloadFile);
+  (await request(fileAddress(item), { signal })).blob(), downloadFile, translate);
 
 function renderEntry(item, entries) {
   const row = document.createElement("li");
@@ -106,7 +109,7 @@ function renderEntry(item, entries) {
   meta.className = "inbox-meta";
   const kind = document.createElement("span");
   kind.className = "inbox-kind";
-  kind.textContent = formatEntryKind(item);
+  kind.textContent = translate(formatEntryKind(item));
   meta.append(kind);
   if (!isFolder && Number.isFinite(item.size)) {
     const size = document.createElement("span");
@@ -130,10 +133,10 @@ function renderEntry(item, entries) {
       event.preventDefault();
       if (row.getAttribute("aria-busy") === "true") return;
       row.setAttribute("aria-busy", "true");
-      feedback.textContent = "正在准备下载…";
+      feedback.textContent = translate("正在准备下载…");
       try {
         await downloadFile(item);
-        feedback.textContent = "已交给浏览器下载";
+        feedback.textContent = translate("已交给浏览器下载");
       } catch (error) {
         feedback.textContent = error.message;
       } finally {
@@ -161,7 +164,7 @@ function renderEntry(item, entries) {
     download.className = "inbox-download";
     download.href = fileAddress(item);
     download.download = item.name;
-    download.textContent = "下载";
+    download.textContent = translate("下载");
     bindDownload(download);
     row.append(download);
   } else {
@@ -234,7 +237,7 @@ function renderFolderTree(data) {
         toggle.type = "button";
         toggle.className = "tree-toggle";
         toggle.dataset.folder = item.id;
-        toggle.setAttribute("aria-label", item.name + "的子目录");
+        toggle.setAttribute("aria-label", translate("{name}的子目录", { name: item.name }));
         const setExpanded = open => {
           nested.hidden = !open;
           toggle.setAttribute("aria-expanded", String(open));
@@ -296,17 +299,17 @@ async function loadFolder(target = folder, offsetPage = page, historyMode, filte
   $("inbox-title").textContent = data.name;
   renderBreadcrumbs(data);
   if (data.folders) renderFolderTree(data);
-  $("inbox-limit").textContent = "单个文件不超过 " + maxUploadMiB + " MiB";
+  $("inbox-limit").textContent = translate("单个文件不超过 {limit} MiB", { limit: maxUploadMiB });
   const grid = $("inbox-entries");
   stopCovers?.();
   grid.replaceChildren(...data.entries.map(item => renderEntry(item, data.entries)));
   stopCovers = observeCovers(grid);
   $("inbox-empty").hidden = data.entries.length > 0;
-  $("inbox-empty").textContent = query || fileType ? "没有找到匹配的文件或文件夹。" : "这个文件夹还没有文件。";
+  $("inbox-empty").textContent = translate(query || fileType ? "没有找到匹配的文件或文件夹。" : "这个文件夹还没有文件。");
   $("inbox-pagination").hidden = !page && !data.hasMore;
   $("inbox-previous").disabled = page === 0;
   $("inbox-next").disabled = !data.hasMore;
-  $("inbox-page").textContent = "第 " + (page + 1) + " 页";
+  $("inbox-page").textContent = translate("第 {page} 页", { page: page + 1 });
   form.hidden = false;
   viewSwitch.hidden = false;
   $("inbox-search").hidden = false;
@@ -396,11 +399,11 @@ async function uploadItems(items) {
         }
         const position = index++;
         if (!file.size || file.size > maxUploadMiB * 1024 * 1024) {
-          throw new Error("文件必须大于 0 字节且不超过 " + maxUploadMiB + " MiB");
+          throw new Error(translate("文件必须大于 0 字节且不超过 {limit} MiB", { limit: maxUploadMiB }));
         }
         const target = await ensurePath(path);
-        const update = showUploadProgress(progress, file, position, total);
-        await uploadFile(folderQuery({ name: file.name }, target), file, {}, update);
+        const update = showUploadProgress(progress, file, position, total, translate);
+        await uploadFile(folderQuery({ name: file.name }, target), file, {}, update, translate);
         completed += 1;
       } catch (error) {
         failures.push([...path, ...(file ? [file.name] : [])].join("/") + " · " + error.message);
@@ -410,8 +413,8 @@ async function uploadItems(items) {
         }
       }
     }
-    const summary = ["已上传 " + completed + "/" + total + " 个文件"];
-    if (created) summary.push("已创建 " + created + " 个文件夹");
+    const summary = [translate("已上传 {done}/{total} 个文件", { done: completed, total })];
+    if (created) summary.push(translate("已创建 {count} 个文件夹", { count: created }));
     status.textContent = [...summary, ...failures].join("\n");
     if ((completed || created) && !form.hidden && !navigating) await loadFolder().catch(folderError);
   } catch (error) {
@@ -437,12 +440,12 @@ directoryInput.addEventListener("change", () => {
 });
 mkdir.addEventListener("click", async () => {
   if (navigating) return;
-  const name = prompt("文件夹名称")?.trim();
+  const name = prompt(translate("文件夹名称"))?.trim();
   if (!name) return;
   setUploadBusy(true);
   try {
     await createFolder(name);
-    status.textContent = "已创建文件夹「" + name + "」";
+    status.textContent = translate("已创建文件夹「{name}」", { name });
     await loadFolder();
   } catch (error) {
     folderError(error);
@@ -509,6 +512,6 @@ $("inbox-next").addEventListener("click", () => {
 if (code) {
   loadFolder().catch(folderError).finally(() => { panel.hidden = false; });
 } else {
-  status.textContent = "公开文件夹链接已失效，请索取新的短链接。";
+  status.textContent = translate("公开文件夹链接已失效，请索取新的短链接。");
   panel.hidden = false;
 }

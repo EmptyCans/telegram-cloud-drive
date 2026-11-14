@@ -1,7 +1,7 @@
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { formatEntryKind, formatEntrySize } from "./entry-format.js";
 
-export function createMediaPreview(dialog, load, download) {
+export function createMediaPreview(dialog, load, download, translate = text => text) {
   const title = dialog.querySelector("h2");
   const details = dialog.querySelector(".media-details");
   const counter = dialog.querySelector(".media-position");
@@ -30,12 +30,12 @@ export function createMediaPreview(dialog, load, download) {
     request = controller;
     const { item, type } = items[index];
     title.textContent = title.title = item.name;
-    details.textContent = [formatEntryKind(item), Number.isFinite(item.size) ? formatEntrySize(item.size) : ""]
+    details.textContent = [translate(formatEntryKind(item)), Number.isFinite(item.size) ? formatEntrySize(item.size) : ""]
       .filter(Boolean).join(" · ");
     counter.textContent = (index + 1) + " / " + items.length;
     previous.disabled = index === 0;
     next.disabled = index === items.length - 1;
-    status.textContent = "正在加载预览…";
+    status.textContent = translate("正在加载预览…");
     if (!dialog.open) dialog.showModal();
     try {
       const blob = await load(item, type, controller.signal);
@@ -51,7 +51,7 @@ export function createMediaPreview(dialog, load, download) {
         if (!controller.signal.aborted) status.textContent = "";
       });
       media.addEventListener("error", () => {
-        if (!controller.signal.aborted) status.textContent = "浏览器无法预览此文件，请下载后打开。";
+        if (!controller.signal.aborted) status.textContent = translate("浏览器无法预览此文件，请下载后打开。");
       });
       url = URL.createObjectURL(blob.slice(0, blob.size, type));
       media.src = url;
