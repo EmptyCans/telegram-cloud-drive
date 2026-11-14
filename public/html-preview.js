@@ -128,6 +128,7 @@ async function loadPreview() {
   }
   // Native PDF viewers require a frame without sandbox restrictions. HTML keeps its sandbox.
   if (pdf) frame.removeAttribute("sandbox");
+  if (type === "text/html") frame.sandbox.add("allow-pointer-lock");
   frame.src = previewUrl;
   frame.hidden = false;
   status.hidden = true;
