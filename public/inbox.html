@@ -10,7 +10,21 @@
   <link rel="stylesheet" href="/style.css">
   <script type="module" src="/inbox.js"></script>
 </head>
-<body>
+<body class="inbox-page">
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"><span class="icon icon-cloud"></span></span>
+        <h1>云盘</h1>
+      </div>
+      <select data-drive-language aria-label="语言">
+        <option value="zh" lang="zh-CN">中文</option>
+        <option value="en" lang="en">English</option>
+        <option value="ko" lang="ko">한국어</option>
+        <option value="ja" lang="ja">日本語</option>
+      </select>
+    </div>
+  </header>
   <main>
     <div id="inbox-panel" class="inbox-layout" hidden>
     <nav id="inbox-sidebar" class="sidebar" aria-label="文件结构" hidden>
@@ -58,10 +72,10 @@
         </nav>
         <label class="sort-control">排序
           <select id="inbox-sort">
-            <option value="name-asc">名称 · 升序</option>
-            <option value="name-desc">名称 · 降序</option>
             <option value="created-desc">创建时间 · 最新</option>
             <option value="created-asc">创建时间 · 最早</option>
+            <option value="name-asc">名称 · 升序</option>
+            <option value="name-desc">名称 · 降序</option>
             <option value="size-desc">大小 · 从大到小</option>
             <option value="size-asc">大小 · 从小到大</option>
           </select>

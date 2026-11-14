@@ -1,7 +1,8 @@
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { formatEntryKind, formatEntrySize } from "./entry-format.js";
+import { clearLocalizedValue, localizeValue } from "./drive-i18n.js";
 
-export function createMediaPreview(dialog, load, download) {
+export function createMediaPreview(dialog, load, download, translate = text => text) {
   const title = dialog.querySelector("h2");
   const details = dialog.querySelector(".media-details");
   const counter = dialog.querySelector(".media-position");
@@ -30,12 +31,12 @@ export function createMediaPreview(dialog, load, download) {
     request = controller;
     const { item, type } = items[index];
     title.textContent = title.title = item.name;
-    details.textContent = [formatEntryKind(item), Number.isFinite(item.size) ? formatEntrySize(item.size) : ""]
-      .filter(Boolean).join(" · ");
+    localizeValue(details, () => [translate(formatEntryKind(item)), Number.isFinite(item.size) ? formatEntrySize(item.size) : ""]
+      .filter(Boolean).join(" · "));
     counter.textContent = (index + 1) + " / " + items.length;
     previous.disabled = index === 0;
     next.disabled = index === items.length - 1;
-    status.textContent = "正在加载预览…";
+    localizeValue(status, () => translate("正在加载预览…"));
     if (!dialog.open) dialog.showModal();
     try {
       const blob = await load(item, type, controller.signal);
@@ -48,16 +49,22 @@ export function createMediaPreview(dialog, load, download) {
         media.playsInline = true;
       }
       media.addEventListener(kind === "image" ? "load" : "loadedmetadata", () => {
-        if (!controller.signal.aborted) status.textContent = "";
+        if (!controller.signal.aborted) {
+          clearLocalizedValue(status);
+          status.textContent = "";
+        }
       });
       media.addEventListener("error", () => {
-        if (!controller.signal.aborted) status.textContent = "浏览器无法预览此文件，请下载后打开。";
+        if (!controller.signal.aborted) localizeValue(status, () => translate("浏览器无法预览此文件，请下载后打开。"));
       });
       url = URL.createObjectURL(blob.slice(0, blob.size, type));
       media.src = url;
       content.append(media);
     } catch (error) {
-      if (!controller.signal.aborted) status.textContent = error.message;
+      if (!controller.signal.aborted) {
+        clearLocalizedValue(status);
+        status.textContent = error.message;
+      }
     }
   }
 
@@ -70,7 +77,10 @@ export function createMediaPreview(dialog, load, download) {
     try {
       await download(selected.item);
     } catch (error) {
-      if (dialog.open && current === request) status.textContent = error.message;
+      if (dialog.open && current === request) {
+        clearLocalizedValue(status);
+        status.textContent = error.message;
+      }
     }
   });
   dialog.addEventListener("close", () => { if (!dialog.open) clear(); });
