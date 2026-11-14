@@ -347,6 +347,11 @@ input::placeholder { color: var(--placeholder); }
 #inbox-form.inbox-dragging { border-color: var(--accent); outline: 2px solid var(--accent); background: var(--accent-soft); }
 #inbox-limit { margin-top: 3px; font-size: 13px; }
 .inbox-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); gap: 12px; list-style: none; padding: 0; margin: 20px 0 0; }
+.inbox-file-list > .file-scroll { position: relative; }
+#inbox-empty {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  margin: 0; padding: 16px; color: var(--muted); text-align: center;
+}
 .inbox-grid li { min-width: 0; border-radius: 12px; padding: 5px 3px; text-align: center; }
 .inbox-grid li:hover, .inbox-grid li:focus-within { background: var(--row-hover); }
 .inbox-panel .inbox-tile { display: grid; justify-items: center; align-content: start; gap: 11px; width: 100%; min-height: 105px; border: 0; background: transparent; padding: 8px 5px 2px; color: var(--text); font-size: 13px; text-decoration: none; white-space: normal; overflow-wrap: anywhere; }
