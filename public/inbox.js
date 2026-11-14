@@ -24,7 +24,7 @@ let maxUploadMiB;
 let listing = 0;
 let query = "";
 let fileType = "";
-let sort = "name-asc";
+let sort = $("inbox-sort").value;
 let navigating = false;
 let treeSnapshot;
 

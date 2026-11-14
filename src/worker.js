@@ -488,7 +488,7 @@ async function publicFolder(request, db, env, url, code, root) {
 
   const offset = Math.max(0, Math.min(1000000, Number.parseInt(url.searchParams.get("offset"), 10) || 0));
   const query = (url.searchParams.get("q") ?? "").trim().slice(0, 120);
-  const order = entrySort.get(url.searchParams.get("sort")) ?? entrySort.get("name-asc");
+  const order = entrySort.get(url.searchParams.get("sort")) ?? entrySort.get("created-desc");
   const filter = entryTypeFilter(url.searchParams.get("type"), 5);
   const { results } = await db.prepare(`SELECT id, kind, name, mime, size, created_at FROM entries
     WHERE parent_id = ?1 AND deleted_at IS NULL AND ${inboxContains("?1", "?2")}
