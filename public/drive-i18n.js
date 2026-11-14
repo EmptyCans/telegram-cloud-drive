@@ -187,34 +187,67 @@ function preferredLanguage() {
     .find(locale => languages.includes(locale)) ?? "en";
 }
 
-export const language = preferredLanguage();
+export let language = preferredLanguage();
 export const translate = (source, values = {}) =>
   (messages.get(source)?.[languages.indexOf(language) - 1] ?? source)
     .replace(/\{(\w+)\}/g, (placeholder, key) => values[key] ?? placeholder);
 
+const bindings = new WeakMap();
+
+export function localizeValue(node, render, property = "textContent") {
+  let properties = bindings.get(node);
+  if (!properties) bindings.set(node, properties = new Map());
+  properties.set(property, render);
+  renderProperty(node, property, render);
+}
+
+export function clearLocalizedValue(node) {
+  bindings.delete(node);
+}
+
+function renderProperty(node, property, render) {
+  const value = render();
+  if (property.startsWith("@")) node.setAttribute(property.slice(1), value);
+  else node[property] = value;
+}
+
 export function localizeDrive() {
-  document.documentElement.lang = language === "zh" ? "zh-CN" : language;
   const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_TEXT);
   while (walker.nextNode()) {
     const node = walker.currentNode;
     const source = node.data.trim();
-    if (messages.has(source)) node.data = node.data.replace(source, () => translate(source));
+    if (messages.has(source)) {
+      const original = node.data;
+      localizeValue(node, () => original.replace(source, () => translate(source)), "data");
+    }
   }
   for (const element of document.querySelectorAll("[aria-label], [placeholder], [title]")) {
     for (const attribute of ["aria-label", "placeholder", "title"]) {
       const source = element.getAttribute(attribute);
-      if (messages.has(source)) element.setAttribute(attribute, translate(source));
+      if (messages.has(source)) localizeValue(element, () => translate(source), "@" + attribute);
     }
   }
   const picker = document.querySelector("[data-drive-language]");
-  picker.value = language;
+  function apply(next) {
+    language = next;
+    picker.value = language;
+    document.documentElement.lang = language === "zh" ? "zh-CN" : language;
+    const nodes = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+    while (nodes.nextNode()) {
+      const node = nodes.currentNode;
+      for (const [property, render] of bindings.get(node) ?? []) renderProperty(node, property, render);
+    }
+  }
+  apply(language);
   picker.addEventListener("change", () => {
+    apply(picker.value);
     try {
       localStorage.setItem("inbox-language", picker.value);
-    } catch {
-      picker.value = language;
-      return;
+    } catch {}
+  });
+  window.addEventListener("storage", event => {
+    if (event.storageArea === localStorage && (event.key === "inbox-language" || event.key === null)) {
+      apply(preferredLanguage());
     }
-    location.reload();
   });
 }

@@ -2,8 +2,8 @@ import { createMediaPreview } from "./media-preview.js";
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
-import { language, localizeDrive, translate } from "./drive-i18n.js";
-import { entryDateFormat, entryExtension, formatEntryKind, formatEntrySize } from "./entry-format.js";
+import { language, localizeDrive, localizeValue, translate } from "./drive-i18n.js";
+import { formatEntryDate, entryExtension, formatEntryKind, formatEntrySize } from "./entry-format.js";
 import { bindViewSwitch } from "./view-switch.js";
 import { droppedItems, pastedFiles, selectedDirectoryItems, showUploadProgress, uploadDirectories, uploadFile } from "./uploads.js";
 
@@ -91,13 +91,19 @@ function button(label, onClick) {
   return element;
 }
 
+function localizedButton(source, onClick) {
+  const element = button("", onClick);
+  localizeValue(element, () => translate(source));
+  return element;
+}
+
 function applyConfig(value) {
   config = value;
-  const title = value.title === "云盘" ? translate("云盘") : value.title;
-  $("title").textContent = title;
+  const title = () => value.title === "云盘" ? translate("云盘") : value.title;
+  localizeValue($("title"), title);
   $("description").textContent = value.description;
   $("description").hidden = !value.description;
-  document.title = title;
+  localizeValue(document.querySelector("title"), title);
 }
 
 function loggedOut() {
@@ -205,7 +211,7 @@ async function loadFolderTree() {
       icon.className = "icon icon-folder";
       icon.setAttribute("aria-hidden", "true");
       const badge = sharingBadge(folder);
-      badge.title = badge.textContent;
+      localizeValue(badge, () => badge.textContent, "title");
       open.append(icon, name, badge);
       moveTarget(row, folder.id, folder.name);
       item.append(row);
@@ -215,7 +221,7 @@ async function loadFolderTree() {
         branch.append(...renderBranch(folder.id));
         const toggle = button("", () => setBranchExpanded(toggle, branch, folder.id, branch.hidden));
         toggle.className = "tree-toggle";
-        toggle.setAttribute("aria-label", translate("{name}的子目录", { name: folder.name }));
+        localizeValue(toggle, () => translate("{name}的子目录", { name: folder.name }), "@aria-label");
         setBranchExpanded(toggle, branch, folder.id, expandedFolders.has(folder.id));
         row.append(toggle);
         item.append(branch);
@@ -291,7 +297,7 @@ function renameInline(item, title) {
   input.type = "text";
   input.value = suffix ? item.name.slice(0, -suffix.length) : item.name;
   input.maxLength = 180 - suffix.length;
-  input.setAttribute("aria-label", translate("新名称"));
+  localizeValue(input, () => translate("新名称"), "@aria-label");
   editor.append(input);
   if (suffix) {
     const extension = document.createElement("span");
@@ -391,19 +397,19 @@ function sharingBadge(item) {
   if (directlyShared || inherited) {
     badge.classList.add("is-shared");
     if (inherited) badge.classList.add("is-inherited");
-    badge.textContent = inherited ? translate("随目录公开") : item.kind === "file" ? translate("已分享") : translate("公开");
+    localizeValue(badge, () => inherited ? translate("随目录公开") : item.kind === "file" ? translate("已分享") : translate("公开"));
   } else if (hasLink) {
     badge.classList.add("is-expired");
-    badge.textContent = translate("已过期");
+    localizeValue(badge, () => translate("已过期"));
   } else {
-    badge.textContent = translate("未分享");
+    localizeValue(badge, () => translate("未分享"));
   }
   return badge;
 }
 
 function shareStatus(item) {
   if (!item.share_expires_at) return translate("永久有效");
-  return translate(shareExpired(item) ? "已过期" : "到期时间") + " · " + entryDateFormat.format(new Date(item.share_expires_at));
+  return translate(shareExpired(item) ? "已过期" : "到期时间") + " · " + formatEntryDate(item.share_expires_at);
 }
 
 function shareAddress(item) {
@@ -424,9 +430,9 @@ async function copyShare(item) {
 function editShare(item) {
   shareItem = item;
   const inbox = item.kind === "folder";
-  $("share-title").textContent = translate(inbox ? "公开文件夹" : "分享") + " · " + item.name;
-  const access = inbox ? translate("持有链接的人可以浏览、下载及上传此文件夹及其子文件夹内的文件。") : translate("持有链接的人可以读取此文件。");
-  $("share-description").textContent = item.share_code ? access + " " + shareStatus(item) : access;
+  localizeValue($("share-title"), () => translate(inbox ? "公开文件夹" : "分享") + " · " + item.name);
+  const access = () => inbox ? translate("持有链接的人可以浏览、下载及上传此文件夹及其子文件夹内的文件。") : translate("持有链接的人可以读取此文件。");
+  localizeValue($("share-description"), () => item.share_code ? access() + " " + shareStatus(item) : access());
   const duration = $("share-duration");
   duration.options[0].hidden = !item.share_code || shareExpired(item);
   duration.value = duration.options[0].hidden ? (inbox ? "604800" : "permanent") : "keep";
@@ -463,9 +469,9 @@ async function refreshLinks() {
     const fullPath = "/" + [...folderPath(item.parent_id).map(({ name }) => name), item.name].join("/");
     const name = button(fullPath, () => jumpToShareItem(item));
     name.className = "link-file-path";
-    name.title = translate("定位到 {path}", { path: fullPath });
+    localizeValue(name, () => translate("定位到 {path}", { path: fullPath }), "title");
     const status = document.createElement("small");
-    status.textContent = translate(item.kind === "folder" ? "公开文件夹" : "文件分享") + " · " + shareStatus(item);
+    localizeValue(status, () => translate(item.kind === "folder" ? "公开文件夹" : "文件分享") + " · " + shareStatus(item));
     text.append(name, status);
     const actions = document.createElement("div");
     actions.className = "row links-actions";
@@ -474,10 +480,10 @@ async function refreshLinks() {
       open.href = shareAddress(item);
       open.target = "_blank";
       open.rel = "noopener noreferrer";
-      open.textContent = translate("打开分享");
-      actions.append(open, button(translate("复制链接"), () => copyShare(item)));
+      localizeValue(open, () => translate("打开分享"));
+      actions.append(open, localizedButton("复制链接", () => copyShare(item)));
     }
-    actions.append(button(translate("修改有效期"), () => editShare(item)), button(translate("撤销"), () => revokeShare(item)));
+    actions.append(localizedButton("修改有效期", () => editShare(item)), localizedButton("撤销", () => revokeShare(item)));
     row.append(text, actions);
     return row;
   }));
@@ -485,7 +491,7 @@ async function refreshLinks() {
   $("links-pagination").hidden = !linksPage && !hasMore;
   $("links-previous").disabled = linksPage === 0;
   $("links-next").disabled = !hasMore;
-  $("links-page").textContent = translate("第 {page} 页", { page: linksPage + 1 });
+  localizeValue($("links-page"), () => translate("第 {page} 页", { page: linksPage + 1 }));
 }
 
 async function showLinksView() {
@@ -531,7 +537,7 @@ function batchChecks() {
 function updateBatchControls() {
   const checks = batchChecks();
   const count = checks.filter(check => check.checked).length;
-  $("batch-count").textContent = translate("已选 {count} 项", { count });
+  localizeValue($("batch-count"), () => translate("已选 {count} 项", { count }));
   $("batch-all").checked = count > 0 && count === checks.length;
   $("batch-all").indeterminate = count > 0 && count < checks.length;
   $("batch-all").disabled = batchBusy || !checks.length;
@@ -584,7 +590,7 @@ function renderItem(item, entries) {
   check.type = "checkbox";
   check.className = "batch-check";
   check.value = item.id;
-  check.setAttribute("aria-label", translate("选择 {name}", { name: item.name }));
+  localizeValue(check, () => translate("选择 {name}", { name: item.name }), "@aria-label");
   check.addEventListener("change", updateBatchControls);
   li.append(check);
   li.addEventListener("click", event => {
@@ -648,7 +654,7 @@ function renderItem(item, entries) {
   meta.append(badges);
   const kind = document.createElement("span");
   kind.className = "entry-kind";
-  kind.textContent = translate(formatEntryKind(item));
+  localizeValue(kind, () => translate(formatEntryKind(item)));
   meta.append(kind);
   if (!folder) {
     const size = document.createElement("small");
@@ -659,7 +665,7 @@ function renderItem(item, entries) {
   if (item.created_at) {
     const date = document.createElement("time");
     date.dateTime = item.created_at;
-    date.textContent = entryDateFormat.format(new Date(item.created_at));
+    localizeValue(date, () => formatEntryDate(item.created_at));
     meta.append(date);
   }
   for (const label of item.tags) {
@@ -674,7 +680,7 @@ function renderItem(item, entries) {
   const details = document.createElement("details");
   const summary = document.createElement("summary");
   summary.textContent = "•••";
-  summary.setAttribute("aria-label", translate("更多操作"));
+  localizeValue(summary, () => translate("更多操作"), "@aria-label");
   const menu = document.createElement("div");
   menu.className = "action-panel";
   details.append(summary, menu);
@@ -686,22 +692,22 @@ function renderItem(item, entries) {
       badge.textContent = badge.title = "." + extension.toLowerCase();
       actions.append(badge);
     }
-    actions.append(button(translate("下载"), () => download(item)));
-    if (openPreview) menu.append(button(translate("预览"), openPreview));
+    actions.append(localizedButton("下载", () => download(item)));
+    if (openPreview) menu.append(localizedButton("预览", openPreview));
   }
   if (item.share_code) {
-    if (!shareExpired(item)) menu.append(button(translate("复制链接"), () => copyShare(item)));
-    menu.append(button(translate("修改有效期"), () => editShare(item)), button(translate("撤销链接"), () => revokeShare(item)));
+    if (!shareExpired(item)) menu.append(localizedButton("复制链接", () => copyShare(item)));
+    menu.append(localizedButton("修改有效期", () => editShare(item)), localizedButton("撤销链接", () => revokeShare(item)));
   } else {
-    menu.append(button(folder ? translate("公开文件夹") : translate("分享"), () => editShare(item)));
+    menu.append(localizedButton(folder ? "公开文件夹" : "分享", () => editShare(item)));
   }
   menu.append(
-    button(translate("重命名"), () => renameInline(item, open)),
-    button(translate("标签"), async () => {
+    localizedButton("重命名", () => renameInline(item, open)),
+    localizedButton("标签", async () => {
       const value = prompt(translate("用逗号分隔标签"), item.tags.join(", "));
       if (value !== null) await update(item, { tags: value.split(/[,，]/).map((part) => part.trim()).filter(Boolean) });
     }),
-    button(translate("删除"), async () => {
+    localizedButton("删除", async () => {
       const message = folder
         ? translate("删除此目录及所有子项目，并尝试同步删除原始消息？")
         : translate("删除此文件、撤销分享链接，并尝试同步删除原始消息？");
@@ -738,7 +744,7 @@ async function refresh(focus = null) {
     return refresh();
   }
   const crumbs = $("breadcrumbs");
-  const root = button(translate("根目录"), goRoot);
+  const root = localizedButton("根目录", goRoot);
   moveTarget(root, null, translate("根目录"));
   crumbs.replaceChildren(root);
   for (const [index, folder] of folders.entries()) {
@@ -750,7 +756,11 @@ async function refresh(focus = null) {
     moveTarget(crumb, folder.id, folder.name);
     crumbs.append(" / ", crumb);
   }
-  if (query || tag) crumbs.append(" / " + translate("全局搜索"));
+  if (query || tag) {
+    const label = document.createTextNode("");
+    localizeValue(label, () => " / " + translate("全局搜索"), "data");
+    crumbs.append(label);
+  }
   const entries = $("entries");
   stopCovers?.();
   visibleEntries = result.entries;
@@ -764,11 +774,11 @@ async function refresh(focus = null) {
     row?.querySelector(".entry-title").focus({ preventScroll: true });
   }
   $("empty").hidden = result.entries.length > 0;
-  $("empty-message").textContent = query || tag || fileType ? translate("没有符合条件的项目。") : translate("拖放或粘贴文件，或点击「上传文件」。");
+  localizeValue($("empty-message"), () => query || tag || fileType ? translate("没有符合条件的项目。") : translate("拖放或粘贴文件，或点击「上传文件」。"));
   $("pagination").hidden = !page && !result.hasMore;
   $("previous").disabled = page === 0;
   $("next").disabled = !result.hasMore;
-  $("page").textContent = translate("第 {page} 页", { page: page + 1 });
+  localizeValue($("page"), () => translate("第 {page} 页", { page: page + 1 }));
 }
 
 function upload(files) {
@@ -835,7 +845,7 @@ $("batch-toggle").addEventListener("click", () => {
   $("batch-toolbar").hidden = !enabled;
   $("entries").classList.toggle("batch-mode", enabled);
   $("batch-toggle").setAttribute("aria-pressed", String(enabled));
-  $("batch-toggle").textContent = enabled ? translate("退出批量") : translate("批量操作");
+  localizeValue($("batch-toggle"), () => enabled ? translate("退出批量") : translate("批量操作"));
   for (const check of batchChecks()) check.checked = false;
   updateBatchControls();
 });

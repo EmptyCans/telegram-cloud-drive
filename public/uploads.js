@@ -1,3 +1,5 @@
+import { localizeValue } from "./drive-i18n.js";
+
 export function pastedFiles(event) {
   if (event.target.closest?.("input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return [];
   return Array.from(event.clipboardData?.files ?? []);
@@ -82,9 +84,9 @@ export function showUploadProgress(panel, file, index, total, translate = null) 
   const name = (index + 1) + "/" + total + " · " + file.name;
   function update(percent) {
     bar.value = percent;
-    label.textContent = translate
-      ? translate(percent === 100 ? "正在保存 · {name}" : "正在上传 {percent}% · {name}", { name, percent })
-      : percent === 100 ? "正在保存 · " + name : "正在上传 " + percent + "% · " + name;
+    const message = percent === 100 ? "正在保存 · {name}" : "正在上传 {percent}% · {name}";
+    if (translate) localizeValue(label, () => translate(message, { name, percent }));
+    else label.textContent = percent === 100 ? "正在保存 · " + name : "正在上传 " + percent + "% · " + name;
   }
   update(0);
   panel.hidden = false;
