@@ -2,14 +2,13 @@ import { createMediaPreview } from "./media-preview.js";
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
-import { formatEntryKind, formatEntrySize } from "./entry-format.js";
-import { language, localizeInbox, translate } from "./inbox-i18n.js";
+import { entryDateFormat, formatEntryKind, formatEntrySize } from "./entry-format.js";
+import { language, localizeDrive, translate } from "./drive-i18n.js";
 import { bindViewSwitch } from "./view-switch.js";
 import { droppedItems, pastedFiles, selectedDirectoryItems, showUploadProgress, uploadDirectories, uploadFile } from "./uploads.js";
 
 const $ = (id) => document.getElementById(id);
-localizeInbox();
-const entryDateFormat = new Intl.DateTimeFormat(document.documentElement.lang, { dateStyle: "medium", timeStyle: "short" });
+localizeDrive();
 const code = location.pathname.match(/^\/s\/([a-zA-Z0-9_-]{12})$/)?.[1];
 let folder = new URLSearchParams(location.search).get("folder");
 const form = $("inbox-form");

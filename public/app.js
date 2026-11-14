@@ -2,11 +2,13 @@ import { createMediaPreview } from "./media-preview.js";
 import { isDocumentPreview, previewType } from "./media-types.js";
 import { observeCovers } from "./media-covers.js";
 import { fileIcon } from "./file-icons.js";
+import { language, localizeDrive, translate } from "./drive-i18n.js";
 import { entryDateFormat, entryExtension, formatEntryKind, formatEntrySize } from "./entry-format.js";
 import { bindViewSwitch } from "./view-switch.js";
 import { droppedItems, pastedFiles, selectedDirectoryItems, showUploadProgress, uploadDirectories, uploadFile } from "./uploads.js";
 
 const $ = (id) => document.getElementById(id);
+localizeDrive();
 const MiB = 1024 * 1024;
 const pageSize = 50;
 let token = sessionStorage.getItem("cloud-drive-token") ?? "";
@@ -65,7 +67,7 @@ async function api(path, options = {}, responseType = "json") {
   if (!response.ok) {
     const { error, code } = await response.json().catch(() => ({}));
     if (response.status === 401) loggedOut();
-    throw Object.assign(new Error(error ?? "请求失败（" + response.status + "）"), { code });
+    throw Object.assign(new Error(language === "zh" && error ? error : translate("请求失败，请稍后重试。")), { code });
   }
   if (response.status === 204) return;
   return responseType === "blob" ? response.blob() : response.json();
@@ -91,10 +93,11 @@ function button(label, onClick) {
 
 function applyConfig(value) {
   config = value;
-  $("title").textContent = value.title;
+  const title = value.title === "云盘" ? translate("云盘") : value.title;
+  $("title").textContent = title;
   $("description").textContent = value.description;
   $("description").hidden = !value.description;
-  document.title = value.title;
+  document.title = title;
 }
 
 function loggedOut() {
@@ -212,7 +215,7 @@ async function loadFolderTree() {
         branch.append(...renderBranch(folder.id));
         const toggle = button("", () => setBranchExpanded(toggle, branch, folder.id, branch.hidden));
         toggle.className = "tree-toggle";
-        toggle.setAttribute("aria-label", folder.name + "的子目录");
+        toggle.setAttribute("aria-label", translate("{name}的子目录", { name: folder.name }));
         setBranchExpanded(toggle, branch, folder.id, expandedFolders.has(folder.id));
         row.append(toggle);
         item.append(branch);
@@ -265,7 +268,7 @@ function moveTarget(element, parent, label) {
     if (event.dataTransfer.getData(entryDragType) !== item.id) return;
     await api(itemPath(item), { method: "PATCH", json: { parent } });
     if (item.kind === "folder") await loadFolderTree();
-    notice("已将「" + item.name + "」移到「" + label + "」");
+    notice(translate("已将「{name}」移到「{folder}」", { name: item.name, folder: label }));
     await refresh();
   }));
 }
@@ -288,7 +291,7 @@ function renameInline(item, title) {
   input.type = "text";
   input.value = suffix ? item.name.slice(0, -suffix.length) : item.name;
   input.maxLength = 180 - suffix.length;
-  input.setAttribute("aria-label", "新名称");
+  input.setAttribute("aria-label", translate("新名称"));
   editor.append(input);
   if (suffix) {
     const extension = document.createElement("span");
@@ -350,7 +353,7 @@ async function download(item) {
 
 function openDocument(item, type) {
   const tab = window.open("about:blank", "_blank");
-  if (!tab) throw new Error("浏览器拦截了新标签页，请允许弹出窗口后重试。");
+  if (!tab) throw new Error(translate("浏览器拦截了新标签页，请允许弹出窗口后重试。"));
   tab.opener = null;
   if (item.share_code && !shareExpired(item)) {
     tab.location.replace(shareAddress(item));
@@ -371,7 +374,7 @@ function openDocument(item, type) {
 }
 
 const preview = createMediaPreview($("preview-dialog"), (item, type, signal) =>
-  api(itemPath(item) + (type.startsWith("image/") ? "/preview" : "/download"), { signal }, "blob"), download);
+  api(itemPath(item) + (type.startsWith("image/") ? "/preview" : "/download"), { signal }, "blob"), download, translate);
 
 function shareExpired(item) {
   return !!item.share_expires_at && Date.parse(item.share_expires_at) <= Date.now();
@@ -388,19 +391,19 @@ function sharingBadge(item) {
   if (directlyShared || inherited) {
     badge.classList.add("is-shared");
     if (inherited) badge.classList.add("is-inherited");
-    badge.textContent = inherited ? "随目录公开" : item.kind === "file" ? "已分享" : "公开";
+    badge.textContent = inherited ? translate("随目录公开") : item.kind === "file" ? translate("已分享") : translate("公开");
   } else if (hasLink) {
     badge.classList.add("is-expired");
-    badge.textContent = "已过期";
+    badge.textContent = translate("已过期");
   } else {
-    badge.textContent = "未分享";
+    badge.textContent = translate("未分享");
   }
   return badge;
 }
 
 function shareStatus(item) {
-  if (!item.share_expires_at) return "永久有效";
-  return (shareExpired(item) ? "已过期 · " : "到期时间 · ") + entryDateFormat.format(new Date(item.share_expires_at));
+  if (!item.share_expires_at) return translate("永久有效");
+  return translate(shareExpired(item) ? "已过期" : "到期时间") + " · " + entryDateFormat.format(new Date(item.share_expires_at));
 }
 
 function shareAddress(item) {
@@ -412,17 +415,17 @@ async function copyShare(item) {
   const link = shareAddress(item);
   try {
     await navigator.clipboard.writeText(link);
-    notice("已复制公开链接");
+    notice(translate("已复制公开链接"));
   } catch {
-    prompt("复制公开链接", link);
+    prompt(translate("复制公开链接"), link);
   }
 }
 
 function editShare(item) {
   shareItem = item;
   const inbox = item.kind === "folder";
-  $("share-title").textContent = inbox ? "公开文件夹 · " + item.name : "分享 · " + item.name;
-  const access = inbox ? "持有链接的人可以浏览、下载及上传此文件夹及其子文件夹内的文件。" : "持有链接的人可以读取此文件。";
+  $("share-title").textContent = translate(inbox ? "公开文件夹" : "分享") + " · " + item.name;
+  const access = inbox ? translate("持有链接的人可以浏览、下载及上传此文件夹及其子文件夹内的文件。") : translate("持有链接的人可以读取此文件。");
   $("share-description").textContent = item.share_code ? access + " " + shareStatus(item) : access;
   const duration = $("share-duration");
   duration.options[0].hidden = !item.share_code || shareExpired(item);
@@ -431,10 +434,10 @@ function editShare(item) {
 }
 
 async function revokeShare(item) {
-  if (!confirm("撤销「" + item.name + "」的公开链接？")) return;
+  if (!confirm(translate("撤销「{name}」的公开链接？", { name: item.name }))) return;
   await update(item, { share: false });
   if (location.hash === "#links") await refreshLinks();
-  notice("已撤销「" + item.name + "」的链接");
+  notice(translate("已撤销「{name}」的链接", { name: item.name }));
 }
 
 async function jumpToShareItem(item) {
@@ -460,9 +463,9 @@ async function refreshLinks() {
     const fullPath = "/" + [...folderPath(item.parent_id).map(({ name }) => name), item.name].join("/");
     const name = button(fullPath, () => jumpToShareItem(item));
     name.className = "link-file-path";
-    name.title = "定位到 " + fullPath;
+    name.title = translate("定位到 {path}", { path: fullPath });
     const status = document.createElement("small");
-    status.textContent = (item.kind === "folder" ? "公开文件夹 · " : "文件分享 · ") + shareStatus(item);
+    status.textContent = translate(item.kind === "folder" ? "公开文件夹" : "文件分享") + " · " + shareStatus(item);
     text.append(name, status);
     const actions = document.createElement("div");
     actions.className = "row links-actions";
@@ -471,10 +474,10 @@ async function refreshLinks() {
       open.href = shareAddress(item);
       open.target = "_blank";
       open.rel = "noopener noreferrer";
-      open.textContent = "打开分享";
-      actions.append(open, button("复制链接", () => copyShare(item)));
+      open.textContent = translate("打开分享");
+      actions.append(open, button(translate("复制链接"), () => copyShare(item)));
     }
-    actions.append(button("修改有效期", () => editShare(item)), button("撤销", () => revokeShare(item)));
+    actions.append(button(translate("修改有效期"), () => editShare(item)), button(translate("撤销"), () => revokeShare(item)));
     row.append(text, actions);
     return row;
   }));
@@ -482,7 +485,7 @@ async function refreshLinks() {
   $("links-pagination").hidden = !linksPage && !hasMore;
   $("links-previous").disabled = linksPage === 0;
   $("links-next").disabled = !hasMore;
-  $("links-page").textContent = "第 " + (linksPage + 1) + " 页";
+  $("links-page").textContent = translate("第 {page} 页", { page: linksPage + 1 });
 }
 
 async function showLinksView() {
@@ -505,14 +508,14 @@ async function remove(item, refreshAfter = true) {
     result = await api(path, options);
   } catch (error) {
     if (error.code !== "LEGACY_DESTINATION") throw error;
-    const same = confirm("部分旧文件未记录原始存储位置。只有这些文件确实存放在当前配置的位置时，才点击确定同步删除。");
-    if (!same && !confirm("从云盘移除这些旧文件，保留它们的原始消息？")) return false;
+    const same = confirm(translate("部分旧文件未记录原始存储位置。只有这些文件确实存放在当前配置的位置时，才点击确定同步删除。"));
+    if (!same && !confirm(translate("从云盘移除这些旧文件，保留它们的原始消息？"))) return false;
     result = await api(path + "?legacy=" + (same ? "current" : "skip"), options);
   }
   const { removed, originalConfirmed, originalUnconfirmed } = result;
-  let message = "已从云盘移除 " + removed + " 项";
-  if (originalConfirmed) message += "，已确认清除 " + originalConfirmed + " 条原始消息";
-  if (originalUnconfirmed) message += "，" + originalUnconfirmed + " 条原始消息未确认删除，请到原位置检查";
+  let message = translate("已从云盘移除 {count} 项", { count: removed });
+  if (originalConfirmed) message += translate("，已确认清除 {count} 条原始消息", { count: originalConfirmed });
+  if (originalUnconfirmed) message += translate("，{count} 条原始消息未确认删除，请到原位置检查", { count: originalUnconfirmed });
   notice(message, originalUnconfirmed > 0);
   if (refreshAfter) {
     if (item.kind === "folder") await loadFolderTree();
@@ -528,7 +531,7 @@ function batchChecks() {
 function updateBatchControls() {
   const checks = batchChecks();
   const count = checks.filter(check => check.checked).length;
-  $("batch-count").textContent = "已选 " + count + " 项";
+  $("batch-count").textContent = translate("已选 {count} 项", { count });
   $("batch-all").checked = count > 0 && count === checks.length;
   $("batch-all").indeterminate = count > 0 && count < checks.length;
   $("batch-all").disabled = batchBusy || !checks.length;
@@ -555,13 +558,13 @@ async function runBatch(items, label, operation) {
       if (!token || token !== session) break;
       try {
         if (await operation(item) !== false) completed += 1;
-        else failures.push(item.name + " · 已跳过");
+        else failures.push(item.name + " · " + translate("已跳过"));
       } catch (error) {
         failures.push(item.name + " · " + error.message);
       }
     }
     if (!token || token !== session) return;
-    notice(["已" + label + " " + completed + "/" + items.length + " 项", ...failures].join("\n"), failures.length > 0);
+    notice([translate(label, { done: completed, total: items.length }), ...failures].join("\n"), failures.length > 0);
     if (completed && items.some(item => item.kind === "folder")) await loadFolderTree();
     await refresh();
   } finally {
@@ -581,7 +584,7 @@ function renderItem(item, entries) {
   check.type = "checkbox";
   check.className = "batch-check";
   check.value = item.id;
-  check.setAttribute("aria-label", "选择 " + item.name);
+  check.setAttribute("aria-label", translate("选择 {name}", { name: item.name }));
   check.addEventListener("change", updateBatchControls);
   li.append(check);
   li.addEventListener("click", event => {
@@ -645,7 +648,7 @@ function renderItem(item, entries) {
   meta.append(badges);
   const kind = document.createElement("span");
   kind.className = "entry-kind";
-  kind.textContent = formatEntryKind(item);
+  kind.textContent = translate(formatEntryKind(item));
   meta.append(kind);
   if (!folder) {
     const size = document.createElement("small");
@@ -671,7 +674,7 @@ function renderItem(item, entries) {
   const details = document.createElement("details");
   const summary = document.createElement("summary");
   summary.textContent = "•••";
-  summary.setAttribute("aria-label", "更多操作");
+  summary.setAttribute("aria-label", translate("更多操作"));
   const menu = document.createElement("div");
   menu.className = "action-panel";
   details.append(summary, menu);
@@ -683,25 +686,25 @@ function renderItem(item, entries) {
       badge.textContent = badge.title = "." + extension.toLowerCase();
       actions.append(badge);
     }
-    actions.append(button("下载", () => download(item)));
-    if (openPreview) menu.append(button("预览", openPreview));
+    actions.append(button(translate("下载"), () => download(item)));
+    if (openPreview) menu.append(button(translate("预览"), openPreview));
   }
   if (item.share_code) {
-    if (!shareExpired(item)) menu.append(button("复制链接", () => copyShare(item)));
-    menu.append(button("修改有效期", () => editShare(item)), button("撤销链接", () => revokeShare(item)));
+    if (!shareExpired(item)) menu.append(button(translate("复制链接"), () => copyShare(item)));
+    menu.append(button(translate("修改有效期"), () => editShare(item)), button(translate("撤销链接"), () => revokeShare(item)));
   } else {
-    menu.append(button(folder ? "公开文件夹" : "分享", () => editShare(item)));
+    menu.append(button(folder ? translate("公开文件夹") : translate("分享"), () => editShare(item)));
   }
   menu.append(
-    button("重命名", () => renameInline(item, open)),
-    button("标签", async () => {
-      const value = prompt("用逗号分隔标签", item.tags.join(", "));
+    button(translate("重命名"), () => renameInline(item, open)),
+    button(translate("标签"), async () => {
+      const value = prompt(translate("用逗号分隔标签"), item.tags.join(", "));
       if (value !== null) await update(item, { tags: value.split(/[,，]/).map((part) => part.trim()).filter(Boolean) });
     }),
-    button("删除", async () => {
+    button(translate("删除"), async () => {
       const message = folder
-        ? "删除此目录及所有子项目，并尝试同步删除原始消息？"
-        : "删除此文件、撤销分享链接，并尝试同步删除原始消息？";
+        ? translate("删除此目录及所有子项目，并尝试同步删除原始消息？")
+        : translate("删除此文件、撤销分享链接，并尝试同步删除原始消息？");
       if (!confirm(message)) return;
       await remove(item);
     })
@@ -735,8 +738,8 @@ async function refresh(focus = null) {
     return refresh();
   }
   const crumbs = $("breadcrumbs");
-  const root = button("根目录", goRoot);
-  moveTarget(root, null, "根目录");
+  const root = button(translate("根目录"), goRoot);
+  moveTarget(root, null, translate("根目录"));
   crumbs.replaceChildren(root);
   for (const [index, folder] of folders.entries()) {
     const crumb = button(folder.name, async () => {
@@ -747,7 +750,7 @@ async function refresh(focus = null) {
     moveTarget(crumb, folder.id, folder.name);
     crumbs.append(" / ", crumb);
   }
-  if (query || tag) crumbs.append(" / 全局搜索");
+  if (query || tag) crumbs.append(" / " + translate("全局搜索"));
   const entries = $("entries");
   stopCovers?.();
   visibleEntries = result.entries;
@@ -761,11 +764,11 @@ async function refresh(focus = null) {
     row?.querySelector(".entry-title").focus({ preventScroll: true });
   }
   $("empty").hidden = result.entries.length > 0;
-  $("empty-message").textContent = query || tag || fileType ? "没有符合条件的项目。" : "拖放或粘贴文件，或点击「上传文件」。";
+  $("empty-message").textContent = query || tag || fileType ? translate("没有符合条件的项目。") : translate("拖放或粘贴文件，或点击「上传文件」。");
   $("pagination").hidden = !page && !result.hasMore;
   $("previous").disabled = page === 0;
   $("next").disabled = !result.hasMore;
-  $("page").textContent = "第 " + (page + 1) + " 页";
+  $("page").textContent = translate("第 {page} 页", { page: page + 1 });
 }
 
 function upload(files) {
@@ -775,7 +778,7 @@ function upload(files) {
 async function uploadItems(items, parent = currentFolder()) {
   if (!token) return;
   if (uploading) {
-    notice("正在上传其他文件，请等待当前批次完成。");
+    notice(translate("正在上传其他文件，请等待当前批次完成。"));
     return;
   }
   uploading = true;
@@ -802,12 +805,12 @@ async function uploadItems(items, parent = currentFolder()) {
         }
         const position = index++;
         if (!file.size || file.size > config.maxUploadMiB * MiB) {
-          throw new Error("文件必须大于 0 字节且不超过 " + config.maxUploadMiB + " MiB");
+          throw new Error(translate("文件必须大于 0 字节且不超过 {limit} MiB", { limit: config.maxUploadMiB }));
         }
         const target = await ensurePath(path);
         const params = new URLSearchParams({ parent: target, name: file.name });
-        const updateProgress = showUploadProgress(progress, file, position, total);
-        await uploadFile("/api/upload?" + params, file, { Authorization: "Bearer " + token }, updateProgress);
+        const updateProgress = showUploadProgress(progress, file, position, total, translate);
+        await uploadFile("/api/upload?" + params, file, { Authorization: "Bearer " + token }, updateProgress, language === "zh" ? null : translate);
         completed += 1;
       } catch (error) {
         if (error.status === 401) loggedOut();
@@ -817,8 +820,8 @@ async function uploadItems(items, parent = currentFolder()) {
     }
     if (created) await loadFolderTree();
     if (completed || created) await refresh();
-    const summary = ["已上传 " + completed + "/" + total + " 个文件"];
-    if (created) summary.push("已创建 " + created + " 个文件夹");
+    const summary = [translate("已上传 {done}/{total} 个文件", { done: completed, total })];
+    if (created) summary.push(translate("已创建 {count} 个文件夹", { count: created }));
     notice([...summary, ...failures].join("\n"), failures.length > 0);
   } finally {
     progress.hidden = true;
@@ -832,7 +835,7 @@ $("batch-toggle").addEventListener("click", () => {
   $("batch-toolbar").hidden = !enabled;
   $("entries").classList.toggle("batch-mode", enabled);
   $("batch-toggle").setAttribute("aria-pressed", String(enabled));
-  $("batch-toggle").textContent = enabled ? "退出批量" : "批量操作";
+  $("batch-toggle").textContent = enabled ? translate("退出批量") : translate("批量操作");
   for (const check of batchChecks()) check.checked = false;
   updateBatchControls();
 });
@@ -842,13 +845,13 @@ $("batch-all").addEventListener("change", event => {
 });
 $("batch-delete").addEventListener("click", action(async () => {
   const items = batchItems();
-  if (!items.length || !confirm("删除选中的 " + items.length + " 项及其子项目，并尝试同步删除原始消息？")) return;
-  await runBatch(items, "删除", item => remove(item, false));
+  if (!items.length || !confirm(translate("删除选中的 {count} 项及其子项目，并尝试同步删除原始消息？", { count: items.length }))) return;
+  await runBatch(items, "已删除 {done}/{total} 项", item => remove(item, false));
 }));
 $("batch-move").addEventListener("click", () => {
   const blocked = new Set(batchItems().filter(item => item.kind === "folder").map(item => item.id));
   const targets = [...folderIndex.values()].filter(folder => !folderPath(folder.id).some(item => blocked.has(item.id)));
-  $("batch-destination").replaceChildren(new Option("根目录", ""), ...targets.map(folder =>
+  $("batch-destination").replaceChildren(new Option(translate("根目录"), ""), ...targets.map(folder =>
     new Option("/" + folderPath(folder.id).map(item => item.name).join("/"), folder.id)));
   $("batch-move-dialog").showModal();
 });
@@ -857,8 +860,8 @@ $("batch-move-form").addEventListener("submit", action(async event => {
   const parent = $("batch-destination").value || null;
   $("batch-move-dialog").close();
   const items = batchItems().filter(item => (item.parent_id ?? null) !== parent);
-  if (!items.length) return notice("所选项目已在目标目录。");
-  await runBatch(items, "移动", item => api(itemPath(item), { method: "PATCH", json: { parent } }));
+  if (!items.length) return notice(translate("所选项目已在目标目录。"));
+  await runBatch(items, "已移动 {done}/{total} 项", item => api(itemPath(item), { method: "PATCH", json: { parent } }));
 }));
 
 document.addEventListener("paste", action(async (event) => {
@@ -902,7 +905,7 @@ $("root-toggle").addEventListener("click", () => {
   const branch = $("folder-tree");
   setBranchExpanded($("root-toggle"), branch, "", branch.hidden);
 });
-moveTarget($("go-root").parentElement, null, "根目录");
+moveTarget($("go-root").parentElement, null, translate("根目录"));
 document.addEventListener("click", (event) => {
   for (const menu of document.querySelectorAll(".actions details[open]")) {
     if (!menu.contains(event.target)) menu.open = false;
@@ -930,7 +933,7 @@ $("sort").addEventListener("change", action(async () => {
   await refresh();
 }));
 $("new-folder").addEventListener("click", action(async () => {
-  const name = prompt("目录名称");
+  const name = prompt(translate("目录名称"));
   if (name === null) return;
   await api("/api/folders", { method: "POST", json: { name, parent: currentFolder() || null } });
   resetFilters();
@@ -994,7 +997,7 @@ $("settings-form").addEventListener("submit", action(async (event) => {
   settings.maxUploadMiB = Number(settings.maxUploadMiB);
   applyConfig(await api("/api/config", { method: "PUT", json: settings }));
   $("settings-dialog").close();
-  notice("设置已保存。其他地区可能稍后更新。");
+  notice(translate("设置已保存。其他地区可能稍后更新。"));
 }));
 for (const close of document.querySelectorAll("[data-close]")) {
   close.addEventListener("click", () => close.closest("dialog").close());
